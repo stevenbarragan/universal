@@ -1,8 +1,9 @@
 WHITESPACE = _{ " " | "\t" | "\r" | "\n"  }
 
-instruction  = { variable_setup }
+instruction  = { variable_setup | variable_get }
 
 variable_setup = { "let" ~ variable_name ~ ":" ~ variable_type }
+variable_get = { variable_name }
 
-variable_name = { LETTER* }
+variable_name = @{ LETTER* }
 variable_type = { "i32" }
