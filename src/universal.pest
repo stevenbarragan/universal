@@ -1,9 +1,22 @@
-WHITESPACE = _{ " " | "\t" | "\r" | "\n"  }
+WHITESPACE = _{ " " | "\t" | "\r" | NEWLINE }
 
-instruction  = { variable_setup | variable_get }
+NEWLINE = _{ "\n" | ";" }
+
+instructions = { instruction* }
+
+instruction  = _{ NEWLINE | variable_setup | variable_get | number_get | basic_operation }
 
 variable_setup = { "let" ~ variable_name ~ ":" ~ variable_type }
 variable_get = { variable_name }
 
-variable_name = @{ LETTER* }
+variable_name = { string }
 variable_type = { "i32" }
+
+number_get = { number }
+
+basic_operation = { value_instruction ~ operator ~ value_instruction }
+value_instruction = { variable_get | number_get }
+operator = { "+" | "-" | "*" }
+
+number = @{ '0'..'9'+  }
+string = @{ LETTER+ }
