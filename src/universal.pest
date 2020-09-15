@@ -21,7 +21,7 @@ number_get = { number }
 
 basic_operation = { value_instruction ~ operator ~ value_instruction }
 value_instruction = { variable_get | number_get }
-operator = { "+" | "-" | "*" }
+operator = { "*" | "+" | "-" }
 
 number = @{ '0'..'9'+  }
 string = @{ LETTER+ }

@@ -37,15 +37,15 @@ enum Language {
     Result,
 }
 
-struct Instruction<'a> {
+struct Instruction {
     kind: Language,
     name: Name,
-    message: Option<&'a str>,
-    params: Vec<Instruction<'a>>,
+    message: Option<String>,
+    params: Vec<Instruction>,
     valueType: String
 }
 
-impl<'a> Instruction<'a> {
+impl Instruction {
     fn to_wast(&self) -> String {
         if self.kind == Language::VariableName {
             return format!("${}", self.name)
@@ -53,7 +53,7 @@ impl<'a> Instruction<'a> {
 
         let mut parts: Vec<String> = vec![];
 
-        if let Some(message) = self.message {
+        if let Some(message) = &self.message {
             parts.push(format!("{}.{}", &self.name, message))
         } else {
             if self.kind == Language::FunctionSet {
@@ -80,7 +80,7 @@ impl<'a> Instruction<'a> {
 use pest::error::Error;
 use pest::iterators::Pair;
 
-fn build_instruction<'a>(pair: Pair<Rule>, variables: &Variables) -> Result<Instruction<'a>, Error<Rule>> {
+fn build_instruction(pair: Pair<Rule>, variables: &Variables) -> Result<Instruction, Error<Rule>> {
     match pair.as_rule() {
         Rule::variable_setup => {
             let mut inner = pair.into_inner();
@@ -123,7 +123,7 @@ fn build_instruction<'a>(pair: Pair<Rule>, variables: &Variables) -> Result<Inst
                 let instruction = Instruction {
                     kind: Language::VariableGet,
                     name: "local".to_string(),
-                    message: Some("get"),
+                    message: Some("get".to_string()),
                     valueType: variable.to_string(),
                     params: vec![
                         Instruction{
@@ -148,7 +148,7 @@ fn build_instruction<'a>(pair: Pair<Rule>, variables: &Variables) -> Result<Inst
             let instruction = Instruction {
                 kind: Language::NumberGet,
                 name: "i32".to_string(),
-                message: Some("const"),
+                message: Some("const".to_string()),
                 valueType: "i32".to_string(),
                 params: vec![
                     Instruction {
@@ -223,12 +223,55 @@ fn build_instruction<'a>(pair: Pair<Rule>, variables: &Variables) -> Result<Inst
             };
 
             Ok(instruction)
+        },
+        Rule::basic_operation => {
+            let mut inner = pair.into_inner();
+
+            let first_pair = inner.next().unwrap();
+            let mut params: Vec<Instruction> = first_pair.into_inner()
+                .map(|pair|
+                    match build_instruction(pair, variables) {
+                        Ok(instruction) => instruction,
+                        _ => panic!("WTF!")
+                    })
+                .collect();
+
+
+            let method = match inner.next().unwrap().as_str() {
+                "+" => "sum",
+                "-" => "minus",
+                "*" => "mul",
+                "/" => "div",
+                method => method
+            };
+
+
+            let second_pair = inner.next().unwrap();
+            let mut second_instructions: Vec<Instruction> = second_pair.into_inner()
+                .map(|pair|
+                    match build_instruction(pair, variables) {
+                        Ok(instruction) => instruction,
+                        _ => panic!("WTF!")
+                    })
+                .collect();
+
+            params.append(&mut second_instructions);
+
+            let instruction = Instruction {
+                kind: Language::BasicOperation,
+                name: params[0].valueType.to_string(),
+                message: Some(method.to_string()),
+                valueType: params[0].valueType.to_string(),
+                params
+            };
+
+            Ok(instruction)
         }
         _ => panic!("WTF")
     }
 }
 
-fn build_block<'a>(pair: Pair<Rule>) -> Result<Vec<Instruction<'a>>, Error<Rule>> {
+fn build_block(pair: Pair<Rule>) -> Result<Vec<Instruction>, Error<Rule>> {
     let mut variables: Variables = HashMap::new();
     let mut instructions: Vec<Instruction> = vec![];
 
@@ -294,4 +337,9 @@ mod test {
     // fn operations() {
     //     assert_eq!(parse_string("5 + 10"), Ok("(i32.sum (i32.const 5) (i32.const 10))".to_string()));
     // }
+
+    #[test]
+    fn operations() {
+        assert_eq!(parse_string("5 + 10"), Ok("(i32.sum (i32.const 5) (i32.const 10))".to_string()));
+    }
 }
