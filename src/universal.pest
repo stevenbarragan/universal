@@ -4,7 +4,12 @@ NEWLINE = _{ "\n" | ";" }
 
 instructions = { instruction* }
 
-instruction  = _{ NEWLINE | variable_setup | variable_get | number_get | basic_operation }
+instruction  = _{ NEWLINE | function_set | variable_setup | variable_get | number_get | basic_operation }
+
+function_set = { "fn" ~ function_name ~ "(" ~ params? ~ ")" ~ ":" ~ variable_type ~ NEWLINE*  }
+params = { param ~ ("," ~  param)* }
+param = { variable_name ~ ":" ~ variable_type }
+function_name = { string }
 
 variable_setup = { "let" ~ variable_name ~ ":" ~ variable_type }
 variable_get = { variable_name }

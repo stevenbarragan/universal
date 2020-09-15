@@ -32,6 +32,9 @@ enum Language {
     VariableGet,
     VariableName,
     VariableSet,
+    ParamSet,
+    FunctionSet,
+    Result,
 }
 
 struct Instruction<'a> {
@@ -53,10 +56,12 @@ impl<'a> Instruction<'a> {
         if let Some(message) = self.message {
             parts.push(format!("{}.{}", &self.name, message))
         } else {
-            parts.push(format!("{}", &self.name))
+            if self.kind == Language::FunctionSet {
+                parts.push(format!("${}", &self.name))
+            } else {
+                parts.push(format!("{}", &self.name))
+            }
         }
-
-        let mut params: Vec<String> = vec!();
 
         for param in &self.params {
             parts.push(param.to_wast());
@@ -158,6 +163,67 @@ fn build_instruction<'a>(pair: Pair<Rule>, variables: &Variables) -> Result<Inst
 
             Ok(instruction)
         },
+        Rule::function_set => {
+            let mut params = vec![];
+
+            let mut inner = pair.into_inner();
+
+            let name = inner.next().unwrap().as_str();
+            let params_inner = inner.next().unwrap().into_inner();
+
+            for pair in params_inner {
+                let mut inner_rules = pair.into_inner();
+
+                let name = inner_rules.next().unwrap().as_str();
+                let kind = inner_rules.next().unwrap().as_str();
+
+                params.push(
+                    Instruction {
+                        kind: Language::ParamSet,
+                        name: "param".to_owned(),
+                        message: None,
+                        valueType: kind.to_owned(),
+                        params: vec![
+                            Instruction {
+                                kind: Language::VariableName,
+                                name: name.to_string(),
+                                message: None,
+                                valueType: kind.to_owned(),
+                                params: vec![],
+                            }
+                        ]
+                    }
+                )
+            }
+
+            let kind = inner.next().unwrap().as_str();
+
+            params.push(Instruction {
+                kind: Language::Result,
+                name: "result".to_owned(),
+                message: None,
+                valueType: kind.to_owned(),
+                params: vec![
+                    Instruction {
+                        kind: Language::NativeType,
+                        name: kind.to_string(),
+                        message: None,
+                        valueType: kind.to_owned(),
+                        params: vec![],
+                    }
+                ]
+            });
+
+            let instruction = Instruction {
+                kind: Language::FunctionSet,
+                name: name.to_string(),
+                message: None,
+                valueType: kind.to_string(),
+                params,
+            };
+
+            Ok(instruction)
+        }
         _ => panic!("WTF")
     }
 }
@@ -216,4 +282,16 @@ mod test {
     fn constants() {
         assert_eq!(parse_string("42"), Ok("(i32.const 42)".to_string()));
     }
+
+    #[test]
+    fn function() {
+        assert_eq!(parse_string("
+                    fn add(x: i32, y: i32) : i32
+                "), Ok("($add (param $x) (param $y) (result i32))".to_string()));
+    }
+
+    // #[test]
+    // fn operations() {
+    //     assert_eq!(parse_string("5 + 10"), Ok("(i32.sum (i32.const 5) (i32.const 10))".to_string()));
+    // }
 }
