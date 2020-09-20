@@ -1,18 +1,19 @@
-WHITESPACE = _{ " " | "\t" | "\r" | NEWLINE }
+WHITESPACE = _{ " " | "\t" | "\r" }
 
 NEWLINE = _{ "\n" | ";" }
 
 instructions = { instruction* }
 
-instruction  = _{ NEWLINE | function_set | variable_setup | variable_get | number_get | basic_operation }
+instruction  = _{ NEWLINE | function_set | basic_operation | variable_setup | variable_get | number_get }
 
 function_set = { "fn" ~ function_name ~ "(" ~ params? ~ ")" ~ ":" ~ variable_type ~ NEWLINE*  }
 params = { param ~ ("," ~  param)* }
 param = { variable_name ~ ":" ~ variable_type }
 function_name = { string }
 
-variable_setup = { "let" ~ variable_name ~ ":" ~ variable_type }
+variable_setup = { "let" ~ variable_name ~ ":" ~ variable_type ~ assignation? }
 variable_get = { variable_name }
+assignation = { "=" ~ instruction }
 
 variable_name = { string }
 variable_type = { "i32" }
