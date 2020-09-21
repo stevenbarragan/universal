@@ -2,27 +2,21 @@ WHITESPACE = _{ " " | "\t" | "\r" }
 
 NEWLINE = _{ "\n" | ";" }
 
-instructions = { instruction* }
+instructions = _{ instruction* }
 
-instruction  = _{ NEWLINE | function_set | basic_operation | variable_setup | variable_get | number_get }
+language = _{ infix | integer | variable_def | variable }
 
-function_set = { "fn" ~ function_name ~ "(" ~ params? ~ ")" ~ ":" ~ variable_type ~ NEWLINE*  }
-params = { param ~ ("," ~  param)* }
-param = { variable_name ~ ":" ~ variable_type }
-function_name = { string }
+instruction  = _{ infix | variable_def }
+right = _{ infix | integer | variable }
+left = _{ variable_def | variable | integer }
+infix = { left ~ message ~ right }
+message = { "*" | "+" | "-" | "/" | "=" }
 
-variable_setup = { "let" ~ variable_name ~ ":" ~ variable_type ~ assignation? }
-variable_get = { variable_name }
-assignation = { "=" ~ instruction }
+integer = @{ NUMBER+ }
 
-variable_name = { string }
-variable_type = { "i32" }
+variable_def = { variable ~ ":" ~ kind }
+variable = { name }
+kind = { name }
 
-number_get = { number }
-
-basic_operation = { value_instruction ~ operator ~ value_instruction }
-value_instruction = { variable_get | number_get }
-operator = { "*" | "+" | "-" }
-
-number = @{ '0'..'9'+  }
+name = @{ LETTER ~ (LETTER | NUMBER)* }
 string = @{ LETTER+ }
