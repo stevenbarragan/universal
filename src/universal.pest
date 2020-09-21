@@ -10,7 +10,7 @@ instruction  = _{ infix | variable_def }
 right = _{ infix | integer | variable }
 left = _{ variable_def | variable | integer }
 infix = { left ~ message ~ right }
-message = { "*" | "+" | "-" | "/" | "=" }
+message = { "*" | "/" | "+" | "-" | "=" }
 
 integer = @{ NUMBER+ }
 
