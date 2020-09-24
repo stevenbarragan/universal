@@ -2,21 +2,27 @@ WHITESPACE = _{ " " | "\t" | "\r" }
 
 NEWLINE = _{ "\n" | ";" }
 
-instructions = _{ instruction* }
+language = _{ infix | integer | function_def | variable_def | variable }
 
-language = _{ infix | integer | variable_def | variable }
+integer = @{ NUMBER+ }
 
-instruction  = _{ infix | variable_def }
+instruction  = _{ infix | variable_def | integer | variable }
+
 right = _{ infix | integer | variable }
 left = _{ variable_def | variable | integer }
 infix = { left ~ message ~ right }
 message = { "*" | "/" | "+" | "-" | "=" }
 
-integer = @{ NUMBER+ }
+function_def = { "fn" ~ name ~ ("(" ~ params? ~ ")")? ~ ":" ~ returns ~ block ~ NEWLINE ~ "end" }
+block = { (NEWLINE* ~ instruction)* }
+returns = { kind ~ ("," ~ kind)* }
+params = _{ "(" ~ param ~ ")" }
+param = { variable ~ ":" ~ kind }
 
 variable_def = { variable ~ ":" ~ kind }
-variable = { name }
-kind = { name }
+variable = { !reserve_word ~ name }
+kind = { !reserve_word ~ name }
 
 name = @{ LETTER ~ (LETTER | NUMBER)* }
 string = @{ LETTER+ }
+reserve_word = { "end" }
