@@ -21,18 +21,9 @@ pub enum Kind {
 
 #[derive(Debug, PartialEq, Clone, Hash, Eq)]
 pub enum Language {
-    Variable {
-        name: String,
-        kind: Kind
-    },
-    Number {
-        value: String
-    },
-    Infix {
-        operation: Operation,
-        left: Box<Language>,
-        right: Box<Language>,
-    }
+    Variable(String, Kind),
+    Number(String),
+    Infix(Operation, Box<Language>, Box<Language>)
 }
 
 #[derive(Debug, PartialEq, Clone, Hash, Eq)]
@@ -50,7 +41,7 @@ fn build_ast(pair: Pair<Rule>, variables: &Variables) -> Result<Language, Error<
         Rule::integer => {
             let value = pair.as_str().to_string();
 
-            Ok(Language::Number{ value })
+            Ok(Language::Number(value))
         },
         Rule::variable => {
             let name = pair.as_str().to_string();
@@ -62,7 +53,7 @@ fn build_ast(pair: Pair<Rule>, variables: &Variables) -> Result<Language, Error<
                     x => Kind::Other(x.to_string())
                 };
 
-                Ok(Language::Variable{ name, kind })
+                Ok(Language::Variable(name, kind))
             } else {
                 panic!("No variable found")
             }
@@ -78,7 +69,7 @@ fn build_ast(pair: Pair<Rule>, variables: &Variables) -> Result<Language, Error<
                 x => Kind::Other(x.to_string())
             };
 
-            Ok(Language::Variable{ name, kind })
+            Ok(Language::Variable(name, kind))
         },
         Rule::infix => {
             let mut inner = pair.into_inner();
@@ -95,7 +86,7 @@ fn build_ast(pair: Pair<Rule>, variables: &Variables) -> Result<Language, Error<
                 _ => panic!("Operation expected")
             };
 
-            Ok(Language::Infix{ operation , left: Box::new(left), right: Box::new(right)})
+            Ok(Language::Infix(operation, Box::new(left), Box::new(right)))
         }
         _ => panic!("WTF")
     }
@@ -116,18 +107,18 @@ mod test {
     fn constants() {
         let mut variables = HashMap::new();
 
-        assert_eq!(to_ast("42", &mut variables), Ok(Number{ value: "42".to_string() }));
+        assert_eq!(to_ast("42", &mut variables), Ok(Number("42".to_string())));
     }
 
     #[test]
     fn variables() {
         let mut variables = HashMap::new();
 
-        assert_eq!(to_ast("x: Int", &mut variables), Ok(Variable{ name: "x".to_string(), kind: Kind::Integer }));
+        assert_eq!(to_ast("x: Int", &mut variables), Ok(Variable("x".to_string(), Kind::Integer)));
 
         variables.insert("x".to_string(), "Int".to_string());
 
-        assert_eq!(to_ast("x", &mut variables), Ok(Variable{ name: "x".to_string(), kind: Kind::Integer }));
+        assert_eq!(to_ast("x", &mut variables), Ok(Variable("x".to_string(), Kind::Integer)));
     }
 
     #[test]
@@ -135,19 +126,11 @@ mod test {
         let mut variables = HashMap::new();
 
         assert_eq!(to_ast("5 + 2", &mut variables),
-            Ok(Infix {
-                operation: Operation::Add,
-                left: Box::new(Number { value: "5".to_string() }),
-                right: Box::new(Number { value: "2".to_string() }),
-            }));
+            Ok(Infix( Operation::Add, Box::new(Number("5".to_string())), Box::new(Number("2".to_string())))));
 
         variables.insert("x".to_string(), "Int".to_string());
 
         assert_eq!(to_ast("x + 1", &mut variables),
-            Ok(Infix {
-                operation: Operation::Add,
-                left: Box::new(Variable { name: "x".to_string(), kind: Kind::Integer }),
-                right: Box::new(Number { value: "1".to_string() }),
-            }));
+            Ok(Infix(Operation::Add, Box::new(Variable ("x".to_string(), Kind::Integer)), Box::new(Number("1".to_string())))));
     }
 }
