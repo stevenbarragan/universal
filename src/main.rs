@@ -11,14 +11,13 @@ pub struct UniversalParser;
 
 fn main() {}
 
-type Variables = HashMap<String, String>;
-
 #[derive(Debug, PartialEq, Clone, Hash, Eq)]
 pub enum ValueType {
     Integer,
     Float,
-    Other(String)
 }
+
+type Variables = HashMap<String, ValueType>;
 
 #[derive(Debug, PartialEq, Clone, Hash, Eq)]
 pub enum Language {
@@ -37,9 +36,14 @@ pub enum Operation {
 use pest::error::Error;
 use pest::iterators::Pair;
 
-fn build_ast(pair: Pair<Rule>, variables: &Variables) -> Result<Language, Error<Rule>> {
-    println!("{:?}", pair);
+fn str_to_value_type(value_type: &str) -> ValueType {
+    match value_type {
+        "Int" => ValueType::Integer,
+        _ => panic!("Value type undefined")
+    }
+}
 
+fn build_ast(pair: Pair<Rule>, variables: &mut Variables) -> Result<Language, Error<Rule>> {
     match pair.as_rule() {
         Rule::integer => {
             let value = pair.as_str().to_string();
@@ -48,12 +52,9 @@ fn build_ast(pair: Pair<Rule>, variables: &Variables) -> Result<Language, Error<
         },
         Rule::variable => {
             let name = pair.as_str().to_string();
-            let kind_str = variables.get(&name);
 
-            if let Some(kind_name) = kind_str {
-                let kind: ValueType = str_to_value_type(kind_name);
-
-                Ok(Language::Variable(name, kind))
+            if let Some(kind) = variables.get(&name) {
+                Ok(Language::Variable(name, kind.clone()))
             } else {
                 panic!("No variable found")
             }
@@ -62,14 +63,11 @@ fn build_ast(pair: Pair<Rule>, variables: &Variables) -> Result<Language, Error<
             let mut inner = pair.into_inner();
 
             let name = inner.next().unwrap().as_str().to_string();
-            let a = inner.next().unwrap().as_str();
+            let kind = inner.next().unwrap().as_str();
 
-            let kind = match a {
-                "Int" => ValueType::Integer,
-                x => ValueType::Other(x.to_string())
-            };
+            let value_type = str_to_value_type(kind);
 
-            Ok(Language::Variable(name, kind))
+            Ok(Language::Variable(name, value_type))
         },
         Rule::infix => {
             let mut inner = pair.into_inner();
@@ -99,22 +97,20 @@ fn build_ast(pair: Pair<Rule>, variables: &Variables) -> Result<Language, Error<
 
             let mut elem = inner.next().unwrap();
 
-            println!("elem: {:?}", elem);
-
             if elem.as_rule() == Rule::params {
-                println!("{:?}", elem);
+                let mut params_inner = elem.into_inner();
 
-                let mut pair = elem.into_inner();
+                while let Some(param) = params_inner.next() {
+                    let mut pair = param.into_inner();
 
-                while let Some(rule) = pair.next() {
-                    let mut par = rule.into_inner();
-
-                    let name = pair.next().unwrap().as_str().to_string();
-                    let kind_str = par.next().unwrap().as_str();
+                    let name = pair.next().unwrap().as_str();
+                    let kind_str = pair.next().unwrap().as_str();
 
                     let kind = str_to_value_type(kind_str);
 
-                    params.push((name, kind));
+                    params.push((name.to_string(), kind.clone()));
+
+                    variables.insert(name.to_string(), kind.clone());
                 }
 
                 elem = inner.next().unwrap();
@@ -170,7 +166,7 @@ mod test {
 
         assert_eq!(to_ast("x: Int", &mut variables), Ok(Variable("x".to_string(), ValueType::Integer)));
 
-        variables.insert("x".to_string(), "Int".to_string());
+        variables.insert("x".to_string(), ValueType::Integer);
 
         assert_eq!(to_ast("x", &mut variables), Ok(Variable("x".to_string(), ValueType::Integer)));
     }
@@ -182,7 +178,7 @@ mod test {
         assert_eq!(to_ast("5 + 2", &mut variables),
             Ok(Infix( Operation::Add, Box::new(Number("5".to_string())), Box::new(Number("2".to_string())))));
 
-        variables.insert("x".to_string(), "Int".to_string());
+        variables.insert("x".to_string(), ValueType::Integer);
 
         assert_eq!(to_ast("x + 1", &mut variables),
             Ok(Infix(Operation::Add, Box::new(Variable ("x".to_string(), ValueType::Integer)), Box::new(Number("1".to_string())))));
@@ -193,7 +189,7 @@ mod test {
         let mut variables = HashMap::new();
 
         let result = to_ast(
-        "fn hello(): Int
+        "fn hello: Int
             42
         end", &mut variables);
 
@@ -202,6 +198,38 @@ mod test {
             vec![],
             vec![ValueType::Integer],
             vec![Number("42".to_string())]
+        );
+
+        assert_eq!(result, Ok(expected));
+
+        let mut variables = HashMap::new();
+
+        let result = to_ast(
+        "fn hello(num: Int): Int
+            42
+        end", &mut variables);
+
+        let expected = Function(
+            "hello".to_string(),
+            vec![("num".to_string(), ValueType::Integer)],
+            vec![ValueType::Integer],
+            vec![Number("42".to_string())]
+        );
+
+        assert_eq!(result, Ok(expected));
+
+        let mut variables = HashMap::new();
+
+        let result = to_ast(
+        "fn hello(num: Int): Int
+            num
+        end", &mut variables);
+
+        let expected = Function(
+            "hello".to_string(),
+            vec![("num".to_string(), ValueType::Integer)],
+            vec![ValueType::Integer],
+            vec![Variable("num".to_string(), ValueType::Integer)]
         );
 
         assert_eq!(result, Ok(expected));

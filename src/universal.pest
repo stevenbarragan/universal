@@ -14,14 +14,15 @@ infix = { left ~ message ~ right }
 message = { "*" | "/" | "+" | "-" | "=" }
 
 function_def = { "fn" ~ name ~ ("(" ~ params? ~ ")")? ~ ":" ~ returns ~ block ~ NEWLINE ~ "end" }
+
 block = { (NEWLINE* ~ instruction)* }
 returns = { kind ~ ("," ~ kind)* }
-params = _{ "(" ~ param ~ ")" }
+params = { param ~ ("," ~ param)* }
 param = { variable ~ ":" ~ kind }
 
 variable_def = { variable ~ ":" ~ kind }
 variable = { !reserve_word ~ name }
-kind = { !reserve_word ~ name }
+kind = { name }
 
 name = @{ LETTER ~ (LETTER | NUMBER)* }
 string = @{ LETTER+ }
