@@ -233,5 +233,37 @@ mod test {
         );
 
         assert_eq!(result, Ok(expected));
+
+        let mut variables = HashMap::new();
+
+        let result = to_ast(
+        "fn hello(num: Int): Int
+            num + 2
+        end", &mut variables);
+
+        let expected = Function(
+            "hello".to_string(),
+            vec![("num".to_string(), ValueType::Integer)],
+            vec![ValueType::Integer],
+            vec![Infix(Operation::Add, Box::new(Variable ("num".to_string(), ValueType::Integer)), Box::new(Number("2".to_string())))]
+        );
+
+        assert_eq!(result, Ok(expected));
+
+        let mut variables = HashMap::new();
+
+        let result = to_ast(
+        "fn add(num: Int, num2: Int): Int
+            num + num2
+        end", &mut variables);
+
+        let expected = Function(
+            "add".to_string(),
+            vec![("num".to_string(), ValueType::Integer), ("num2".to_string(), ValueType::Integer)],
+            vec![ValueType::Integer],
+            vec![Infix(Operation::Add, Box::new(Variable ("num".to_string(), ValueType::Integer)), Box::new(Variable ("num2".to_string(), ValueType::Integer)))]
+        );
+
+        assert_eq!(result, Ok(expected));
     }
 }
