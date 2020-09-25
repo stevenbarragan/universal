@@ -25,6 +25,7 @@ pub enum Language {
     Number(String),
     Infix(Operation, Box<Language>, Box<Language>),
     Function(String, Vec<(String, ValueType)>, Vec<ValueType>, Vec<Language>),
+    Call(String, Vec<Language>, ValueType),
 }
 
 #[derive(Debug, PartialEq, Clone, Hash, Eq)]
@@ -79,6 +80,14 @@ fn to_wasm(node: &Language) -> String {
                 .join(" ");
 
             format!("(${} {} {} {})", name, params, results, instructions)
+        },
+        Language::Call(function_name, params, _) => {
+            let params = params.into_iter()
+                .map( |language| to_wasm(language) )
+                .collect::<Vec<String>>()
+                .join(" ");
+
+            format!("call(${}, {})", function_name, params)
         }
     }
 }
@@ -93,6 +102,7 @@ fn find_value_type(node: &Language) -> &ValueType {
         Language::Function(_, _, results, _) => {
             &results[0]
         }
+        Language::Call(_, _, value_type) => value_type
     }
 }
 
@@ -182,6 +192,8 @@ fn build_ast(pair: Pair<Rule>, variables: &mut Variables) -> Result<Language, Er
                 while let Some(rule) = pair.next() {
                     let kind = str_to_value_type(rule.as_str());
 
+                    variables.insert(name.to_string(), kind.clone());
+
                     results.push(kind);
                 }
 
@@ -197,6 +209,25 @@ fn build_ast(pair: Pair<Rule>, variables: &mut Variables) -> Result<Language, Er
             }
 
             Ok(Language::Function(name, params, results, instructions))
+        },
+        Rule::function_call => {
+            let mut inner = pair.into_inner();
+
+            let name = inner.next().unwrap().as_str().to_string();
+
+            let mut params = vec![];
+
+            let mut params_inner = inner.next().unwrap().into_inner();
+
+            while let Some(param) = params_inner.next() {
+                params.push(build_ast(param, variables)?);
+            }
+
+            if let Some(value_type) = variables.get(&name) {
+                Ok(Language::Call(name, params, value_type.clone()))
+            } else {
+                panic!("No variable found")
+            }
         },
         _ => panic!("WTF")
     }
@@ -229,6 +260,15 @@ mod test {
         variables.insert("x".to_string(), ValueType::Integer);
 
         assert_eq!(to_ast("x", &mut variables), Ok(Variable("x".to_string(), ValueType::Integer)));
+    }
+
+    #[test]
+    fn function_call() {
+        let mut variables = HashMap::new();
+
+        variables.insert("add".to_string(), ValueType::Integer);
+
+        assert_eq!(to_ast("add(1)", &mut variables), Ok(Call("add".to_string(), vec![Number("1".to_string())], ValueType::Integer)));
     }
 
     #[test]

@@ -2,9 +2,12 @@ WHITESPACE = _{ " " | "\t" | "\r" }
 
 NEWLINE = _{ "\n" | ";" }
 
-language = _{ infix | integer | function_def | variable_def | variable }
+language = _{ infix | integer | function_call | function_def | variable_def | variable }
 
 integer = @{ NUMBER+ }
+
+function_call = { name ~ "(" ~ function_params ~ ")" }
+function_params = { right ~ ("," ~ right)* }
 
 instruction  = _{ infix | variable_def | integer | variable }
 
