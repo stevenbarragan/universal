@@ -13,10 +13,10 @@ left = _{ variable_def | variable | integer }
 infix = { left ~ message ~ right }
 message = { "*" | "/" | "+" | "-" | "=" }
 
-function_def = { "fn" ~ name ~ ("(" ~ params? ~ ")")? ~ ":" ~ returns ~ block ~ NEWLINE ~ "end" }
+function_def = { "fn" ~ name ~ ("(" ~ params? ~ ")")? ~ ":" ~ results ~ block ~ NEWLINE ~ "end" }
 
 block = { (NEWLINE* ~ instruction)* }
-returns = { kind ~ ("," ~ kind)* }
+results = { kind ~ ("," ~ kind)* }
 params = { param ~ ("," ~ param)* }
 param = { variable ~ ":" ~ kind }
 

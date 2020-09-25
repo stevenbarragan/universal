@@ -25,7 +25,6 @@ pub enum Language {
     Number(String),
     Infix(Operation, Box<Language>, Box<Language>),
     Function(String, Vec<(String, ValueType)>, Vec<ValueType>, Vec<Language>),
-    Kind(ValueType)
 }
 
 #[derive(Debug, PartialEq, Clone, Hash, Eq)]
@@ -39,7 +38,68 @@ use pest::iterators::Pair;
 fn str_to_value_type(value_type: &str) -> ValueType {
     match value_type {
         "Int" => ValueType::Integer,
+        "Float" => ValueType::Float,
         _ => panic!("Value type undefined")
+    }
+}
+
+fn to_wasm(node: &Language) -> String {
+    match node {
+        Language::Variable(name, value_type) => {
+            format!("(local ${} {})", name, value_type_to_wasm(value_type))
+        },
+        Language::Number(number) => {
+            format!("(i32.const {})", number)
+        },
+        Language::Infix(operation, left, right) => {
+            let method = match operation {
+                Operation::Add => "add",
+                Operation::Minus => "sub",
+                Operation::Mult => "mul",
+                Operation::Div => "div",
+                _ => panic!("operation no suported yet")
+            };
+
+            format!("({}.{} {} {})", value_type_to_wasm(find_value_type(left)), method, to_wasm(left), to_wasm(right))
+        },
+        Language::Function(name, params, results, block) => {
+            let params = params.into_iter()
+                .map( |(name, value_type)| format!("(param {} {})", name, value_type_to_wasm(value_type)) )
+                .collect::<Vec<String>>()
+                .join(" ");
+
+            let results = results.into_iter()
+                .map( |value_type| format!("(result {})", value_type_to_wasm(value_type)))
+                .collect::<Vec<String>>()
+                .join(" ");
+
+            let instructions = block.into_iter()
+                .map( |language| to_wasm(language) )
+                .collect::<Vec<String>>()
+                .join(" ");
+
+            format!("(${} {} {} {})", name, params, results, instructions)
+        }
+    }
+}
+
+fn find_value_type(node: &Language) -> &ValueType {
+    match node {
+        Language::Variable(_, value_type) => value_type,
+        Language::Number(number) => &ValueType::Integer,
+        Language::Infix(operation, left, right) => {
+            find_value_type(left)
+        },
+        Language::Function(_, _, results, _) => {
+            &results[0]
+        }
+    }
+}
+
+fn value_type_to_wasm(value_type: &ValueType) -> String {
+    match value_type {
+        ValueType::Integer => "i32".to_string(),
+        ValueType::Float => "f32".to_string(),
     }
 }
 
@@ -91,7 +151,7 @@ fn build_ast(pair: Pair<Rule>, variables: &mut Variables) -> Result<Language, Er
 
             let name = inner.next().unwrap().as_str().to_string();
 
-            let mut returns = vec![];
+            let mut results = vec![];
             let mut params = vec![];
             let mut instructions = vec![];
 
@@ -116,13 +176,13 @@ fn build_ast(pair: Pair<Rule>, variables: &mut Variables) -> Result<Language, Er
                 elem = inner.next().unwrap();
             }
 
-            if elem.as_rule() == Rule::returns {
+            if elem.as_rule() == Rule::results {
                 let mut pair = elem.into_inner();
 
                 while let Some(rule) = pair.next() {
                     let kind = str_to_value_type(rule.as_str());
 
-                    returns.push(kind);
+                    results.push(kind);
                 }
 
                 elem = inner.next().unwrap();
@@ -136,7 +196,7 @@ fn build_ast(pair: Pair<Rule>, variables: &mut Variables) -> Result<Language, Er
                 }
             }
 
-            Ok(Language::Function(name, params, returns, instructions))
+            Ok(Language::Function(name, params, results, instructions))
         },
         _ => panic!("WTF")
     }
@@ -265,5 +325,17 @@ mod test {
         );
 
         assert_eq!(result, Ok(expected));
+    }
+
+    #[test]
+    fn function_to_wasm() {
+        let function = Function(
+            "add2".to_string(),
+            vec![("num".to_string(), ValueType::Integer)],
+            vec![ValueType::Integer],
+            vec![Infix(Operation::Add, Box::new(Variable ("num".to_string(), ValueType::Integer)), Box::new(Number("2".to_string())))]
+        );
+
+        assert_eq!(to_wasm(&function), "($add2 (param num i32) (result i32) (i32.add (local $num i32) (i32.const 2)))")
     }
 }
