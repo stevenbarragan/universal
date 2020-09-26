@@ -9,3 +9,7 @@ edition = "2018"
 [dependencies]
 pest = "2.1"
 pest_derive = "2.1"
+rustyline = "6.3.0"
+anyhow = "1.0.32"
+wasmer-runtime = "0.17.1"
+wat = "1.0"

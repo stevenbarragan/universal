@@ -9,7 +9,72 @@ use std::collections::HashMap;
 #[grammar = "universal.pest"]
 pub struct UniversalParser;
 
-fn main() {}
+extern crate wat;
+
+use rustyline::error::ReadlineError;
+use rustyline::Editor;
+
+use wasmer_runtime::{
+    instantiate,
+    DynFunc,
+    Value,
+    imports,
+    error,
+
+};
+
+fn main() -> anyhow::Result<()> {
+    let mut rl = Editor::<()>::new();
+    loop {
+	let readline = rl.readline(">> ");
+
+	match readline {
+	    Ok(line) => {
+                let mut variables = HashMap::new();
+
+                let ast = to_ast(&line, &mut variables)?;
+
+		let module_wat = format!(
+                    "(module (func (export \"main\") (result {}) {}))",
+                    value_type_to_wasm(find_value_type(&ast)),
+                    to_wasm(&ast)
+                );
+
+                println!("{:?}", module_wat);
+
+                let binary = wat::parse_str(module_wat)?;
+
+                let import_object = imports! {};
+
+                if let Ok(instance) = instantiate(&binary, &import_object) {
+                    let main = instance
+                        .exports
+                        .get::<DynFunc>("main")?;
+
+                    match main.call(&[]) {
+                        Ok(result) => println!("=> {:?}", result),
+                        e => println!("{:?}", e)
+                    }
+                };
+	    },
+            Err(ReadlineError::Interrupted) => {
+		println!("CTRL-C");
+		break
+	    },
+	    Err(ReadlineError::Eof) => {
+		println!("CTRL-D");
+		break
+	    },
+	    Err(err) => {
+		println!("Error: {:?}", err);
+		break
+	    }
+	}
+
+    }
+
+    return Ok(())
+}
 
 #[derive(Debug, PartialEq, Clone, Hash, Eq)]
 pub enum ValueType {
@@ -26,6 +91,7 @@ pub enum Language {
     Infix(Operation, Box<Language>, Box<Language>),
     Function(String, Vec<(String, ValueType)>, Vec<ValueType>, Vec<Language>),
     Call(String, Vec<Language>, ValueType),
+    Block(Vec<Language>),
 }
 
 #[derive(Debug, PartialEq, Clone, Hash, Eq)]
@@ -88,6 +154,12 @@ fn to_wasm(node: &Language) -> String {
                 .join(" ");
 
             format!("call(${}, {})", function_name, params)
+        },
+        Language::Block(instructions) => {
+            instructions.into_iter()
+                .map( |language| to_wasm(language) )
+                .collect::<Vec<String>>()
+                .join(" ")
         }
     }
 }
@@ -95,14 +167,21 @@ fn to_wasm(node: &Language) -> String {
 fn find_value_type(node: &Language) -> &ValueType {
     match node {
         Language::Variable(_, value_type) => value_type,
-        Language::Number(number) => &ValueType::Integer,
+        Language::Number(_) => &ValueType::Integer,
         Language::Infix(operation, left, right) => {
             find_value_type(left)
         },
         Language::Function(_, _, results, _) => {
             &results[0]
         }
-        Language::Call(_, _, value_type) => value_type
+        Language::Call(_, _, value_type) => value_type,
+        Language::Block(instructions) => {
+            if let Some(instruction) = instructions.last() {
+                find_value_type(instruction) 
+            } else {
+                panic!("No instructions")
+            }
+        }
     }
 }
 
