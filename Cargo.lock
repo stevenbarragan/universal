@@ -702,6 +702,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "rustyline-derive"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a0d916b6379415978cda79e3bdab7040aee6b97c40d5bd73e00d1cac66e271d8"
+dependencies = [
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "scopeguard"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -857,6 +867,7 @@ dependencies = [
  "pest",
  "pest_derive",
  "rustyline",
+ "rustyline-derive",
  "wasmer-runtime",
  "wat",
 ]

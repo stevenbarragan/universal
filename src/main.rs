@@ -11,8 +11,6 @@ pub struct UniversalParser;
 
 extern crate wat;
 
-use rustyline::error::ReadlineError;
-use rustyline::Editor;
 
 use wasmer_runtime::{
     instantiate,
@@ -23,8 +21,35 @@ use wasmer_runtime::{
 
 };
 
+use rustyline::error::ReadlineError;
+use rustyline::validate::{ValidationContext, ValidationResult, Validator};
+use rustyline::Editor;
+use rustyline_derive::{Completer, Helper, Highlighter, Hinter};
+
+#[derive(Completer, Helper, Highlighter, Hinter)]
+struct InputValidator {}
+
+impl Validator for InputValidator {
+    fn validate(&self, ctx: &mut ValidationContext) -> Result<ValidationResult, ReadlineError> {
+        use ValidationResult::{Incomplete, Invalid, Valid};
+        let input = ctx.input();
+
+	let result = if let Ok(_) = UniversalParser::parse(Rule::language, input) {
+            Valid(None)
+        } else {
+            Incomplete
+        };
+
+        Ok(result)
+    }
+}
+
 fn main() -> anyhow::Result<()> {
-    let mut rl = Editor::<()>::new();
+    let validator = InputValidator {};
+    let mut rl = Editor::new();
+
+    rl.set_helper(Some(validator));
+
     loop {
 	let readline = rl.readline(">> ");
 
@@ -385,7 +410,7 @@ mod test {
 
         let result = to_ast(
         "fn hello(num: Int): Int
-            42
+          42
         end", &mut variables);
 
         let expected = Function(
