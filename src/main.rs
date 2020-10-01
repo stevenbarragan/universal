@@ -105,13 +105,14 @@ pub enum ValueType {
 }
 
 type Variables = HashMap<String, ValueType>;
+type Params = Vec<(String, ValueType)>;
 
 #[derive(Debug, PartialEq, Clone, Hash, Eq)]
 pub enum Language {
     Variable(String, ValueType),
     Number(String),
     Infix(Operation, Box<Language>, Box<Language>),
-    Function(String, Vec<(String, ValueType)>, Vec<ValueType>, Vec<Language>),
+    Function(String, Params, Vec<ValueType>, Vec<Language>),
     Call(String, Vec<Language>, ValueType),
     Block(Vec<Language>),
 }
@@ -134,8 +135,8 @@ fn str_to_value_type(value_type: &str) -> ValueType {
 
 fn to_wasm(node: &Language) -> String {
     match node {
-        Language::Variable(name, value_type) => {
-            format!("(local ${} {})", name, value_type_to_wasm(value_type))
+        Language::Variable(name, _) => {
+            format!("(local.get ${})", name)
         },
         Language::Number(number) => {
             format!("(i32.const {})", number)
@@ -158,8 +159,8 @@ fn to_wasm(node: &Language) -> String {
             format!("({}.{} {} {})", value_type_to_wasm(find_value_type(left)), method, to_wasm(left), to_wasm(right))
         },
         Language::Function(name, params, results, block) => {
-            let params = params.into_iter()
-                .map( |(name, value_type)| format!("(param {} {})", name, value_type_to_wasm(value_type)) )
+            let params_str = params.into_iter()
+                .map( |(name, value_type)| format!("(param ${} {})", name, value_type_to_wasm(value_type)) )
                 .collect::<Vec<String>>()
                 .join(" ");
 
@@ -173,7 +174,20 @@ fn to_wasm(node: &Language) -> String {
                 .collect::<Vec<String>>()
                 .join(" ");
 
-            format!("(${} {} {} {})", name, params, results, instructions)
+            let locals = find_locals(&block, &params).into_iter()
+                .map( |(name, value_type)| format!("(local ${} {})", name, value_type_to_wasm(&value_type)) )
+                .collect::<Vec<String>>()
+                .join(" ");
+
+            println!("instructions: {}", instructions);
+            println!("locals: {}", locals);
+
+            let body = vec![params_str.to_string(), results.to_string(), locals.to_string(), instructions.to_string()].into_iter()
+                .filter( |x| x != "" )
+                .collect::<Vec<String>>()
+                .join(" ");
+
+            format!("(func ${} {})", name, body)
         },
         Language::Call(function_name, params, _) => {
             let params = params.into_iter()
@@ -233,7 +247,7 @@ fn build_ast(pair: Pair<Rule>, variables: &mut Variables) -> Result<Language, Er
             if let Some(kind) = variables.get(&name) {
                 Ok(Language::Variable(name, kind.clone()))
             } else {
-                panic!("No variable found")
+                panic!("variable: ${} not found", name)
             }
         },
         Rule::variable_def => {
@@ -243,6 +257,8 @@ fn build_ast(pair: Pair<Rule>, variables: &mut Variables) -> Result<Language, Er
             let kind = inner.next().unwrap().as_str();
 
             let value_type = str_to_value_type(kind);
+
+            variables.insert(name.to_string(), value_type.clone());
 
             Ok(Language::Variable(name, value_type))
         },
@@ -344,6 +360,45 @@ pub fn to_ast(original: &str, variables: &mut Variables) -> Result<Language, Err
     let pair = UniversalParser::parse(Rule::language, original)?.next().unwrap();
 
     build_ast(pair, variables)
+}
+
+fn find_locals(instructions: &Vec<Language>, params: &Params) -> Variables {
+    let mut variables: Variables = HashMap::new();
+
+    for instruction in instructions.iter() {
+        find_local(instruction, &mut variables, &params);
+    }
+
+    variables
+}
+
+fn find_local<'a>(instruction: &'a Language, variables: &'a mut Variables, params: &Params) -> &'a Variables {
+    println!("{:?}", instruction);
+
+    match instruction {
+        Language::Variable(name, value_type) => {
+            if !name_on_params(&name, params) {
+                variables.insert(name.to_string(), value_type.clone());
+            }
+        },
+        Language::Infix(_, left, right) => {
+            find_local(left, variables, params);
+            find_local(right, variables, params);
+        }
+        _ => ()
+    }
+
+    variables
+}
+
+fn name_on_params(name: &String, params: &Params) -> bool {
+    for (params_name, _) in params.into_iter() {
+        if name == params_name {
+            return true
+        }
+    }
+
+    false
 }
 
 #[cfg(test)]
@@ -496,7 +551,35 @@ mod test {
             vec![Infix(Operation::Add, Box::new(Variable ("num".to_string(), ValueType::Integer)), Box::new(Number("2".to_string())))]
         );
 
-        assert_eq!(to_wasm(&function), "($add2 (param num i32) (result i32) (i32.add (local $num i32) (i32.const 2)))")
+        assert_eq!(to_wasm(&function), "(func $add2 (param $num i32) (result i32) (i32.add (local.get $num) (i32.const 2)))");
+
+        let mut variables = HashMap::new();
+
+        let function_ast = to_ast(
+        "fn tres: Int
+            num: Int = 3
+        end", &mut variables);
+
+        match function_ast {
+            Ok(function) =>  {
+                assert_eq!(to_wasm(&function), "(func $tres (result i32) (local $num i32) (local.set $num (i32.const 3)))");
+            },
+            Err(e) => println!("{}", e),
+        }
+
+        let function_ast = to_ast(
+        "fn tres(x: Int): Int
+            num: Int = 3
+            x + num
+        end", &mut variables);
+
+        match function_ast {
+            Ok(function) =>  {
+                assert_eq!(to_wasm(&function), 
+                    "(func $tres (param $x i32) (result i32) (local $num i32) (local.set $num (i32.const 3)) (i32.add (local.get $x) (local.get $num)))");
+            },
+            Err(e) => println!("{}", e),
+        }
     }
 
     #[test]
@@ -506,3 +589,4 @@ mod test {
         assert_eq!(to_wasm(&assignation), "(local.set $x (i32.const 1))")
     }
 }
+
