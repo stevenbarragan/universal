@@ -55,11 +55,14 @@ fn main() -> anyhow::Result<()> {
 
                 let ast = to_ast(&line, &mut variables)?;
 
-		let module_wat = format!(
-                    "(module (func (export \"main\") (result {}) {}))",
-                    value_type_to_wasm(find_value_type(&ast)),
-                    to_wasm(&ast)
-                );
+                let main = Language::Function(
+                    "main".to_string(),
+                    vec![],
+                    vec![find_value_type(&ast).clone()],
+                    vec![ast]
+                    );
+
+		let module_wat = format!("(module {} (export \"main\" (func $main)))", to_wasm(&main));
 
                 println!("{:?}", module_wat);
 
