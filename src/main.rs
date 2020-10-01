@@ -141,12 +141,18 @@ fn to_wasm(node: &Language) -> String {
             format!("(i32.const {})", number)
         },
         Language::Infix(operation, left, right) => {
+            if &Operation::Eq == operation {
+                if let Language::Variable(name, _) = left.as_ref() {
+                    return format!("(local.set ${} {})", name, to_wasm(right))
+                }
+            }
+
             let method = match operation {
                 Operation::Add => "add",
                 Operation::Minus => "sub",
                 Operation::Mult => "mul",
                 Operation::Div => "div",
-                _ => panic!("operation no suported yet")
+                Operation::Eq => "=",
             };
 
             format!("({}.{} {} {})", value_type_to_wasm(find_value_type(left)), method, to_wasm(left), to_wasm(right))
@@ -386,6 +392,19 @@ mod test {
     }
 
     #[test]
+    fn assignations() {
+        let mut variables = HashMap::new();
+
+        assert_eq!(to_ast("x: Int = 1", &mut variables),
+            Ok(Infix(Operation::Eq, Box::new(Variable ("x".to_string(), ValueType::Integer)), Box::new(Number("1".to_string())))));
+
+        variables.insert("x".to_string(), ValueType::Integer);
+
+        assert_eq!(to_ast("x = 1", &mut variables),
+            Ok(Infix(Operation::Eq, Box::new(Variable ("x".to_string(), ValueType::Integer)), Box::new(Number("1".to_string())))));
+    }
+
+    #[test]
     fn functions() {
         let mut variables = HashMap::new();
 
@@ -478,5 +497,12 @@ mod test {
         );
 
         assert_eq!(to_wasm(&function), "($add2 (param num i32) (result i32) (i32.add (local $num i32) (i32.const 2)))")
+    }
+
+    #[test]
+    fn assignation_to_wasm() {
+        let assignation = Infix(Operation::Eq, Box::new(Variable ("x".to_string(), ValueType::Integer)), Box::new(Number("1".to_string())));
+
+        assert_eq!(to_wasm(&assignation), "(local.set $x (i32.const 1))")
     }
 }
