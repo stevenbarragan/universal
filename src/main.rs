@@ -118,6 +118,7 @@ pub enum Language {
     Function(String, Params, Vec<ValueType>, Vec<Language>),
     Call(String, Vec<Language>, ValueType),
     Block(Vec<Language>),
+    Module(String, Vec<Language>),
 }
 
 #[derive(Debug, PartialEq, Clone, Hash, Eq)]
@@ -205,6 +206,21 @@ fn to_wasm(node: &Language) -> String {
                 .map( |language| to_wasm(language) )
                 .collect::<Vec<String>>()
                 .join(" ")
+        },
+        Language::Module(name, instructions) => {
+            let value_type = match instructions.last() {
+                Some(instruction) => find_value_type(instruction),
+                None => panic!("No instructions")
+            };
+
+            let main = Language::Function(
+                "main".to_string(),
+                vec![],
+                vec![value_type.clone()],
+                instructions.clone()
+            );
+
+            format!("(module ${} {})", name, to_wasm(&main))
         }
     }
 }
@@ -221,6 +237,13 @@ fn find_value_type(node: &Language) -> &ValueType {
         }
         Language::Call(_, _, value_type) => value_type,
         Language::Block(instructions) => {
+            if let Some(instruction) = instructions.last() {
+                find_value_type(instruction) 
+            } else {
+                panic!("No instructions")
+            }
+        }
+        Language::Module(_, instructions) => {
             if let Some(instruction) = instructions.last() {
                 find_value_type(instruction) 
             } else {
@@ -355,6 +378,23 @@ fn build_ast(pair: Pair<Rule>, variables: &mut Variables) -> Result<Language, Er
                 panic!("No variable found")
             }
         },
+        Rule::module => {
+            let mut instructions = vec![];
+
+            let mut inner = pair.into_inner();
+
+            let name = inner.next().unwrap().as_str().to_string();
+
+            let block = inner.next().unwrap();
+
+            let mut pair = block.into_inner();
+
+            while let Some(instruction) = pair.next() {
+                instructions.push(build_ast(instruction, variables)?);
+            }
+
+            Ok(Language::Module(name, instructions))
+        }
         _ => panic!("WTF")
     }
 }
@@ -591,5 +631,19 @@ mod test {
 
         assert_eq!(to_wasm(&assignation), "(local.set $x (i32.const 1))")
     }
-}
 
+    #[test]
+    fn modules() {
+        let mut variables = HashMap::new();
+
+        let module = to_ast(
+        "module awesome
+            42
+        end
+        ", &mut variables);
+
+        let expected  = Language::Module("awesome".to_string(), vec![Language::Number("42".to_string())]);
+
+        assert_eq!(module, Ok(expected));
+    }
+}
