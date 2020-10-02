@@ -118,7 +118,7 @@ pub enum Language {
     Function(String, Params, Vec<ValueType>, Vec<Language>),
     Call(String, Vec<Language>, ValueType),
     Block(Vec<Language>),
-    Module(String, Vec<Language>),
+    Module(String, Vec<Language>, Vec<Language>),
 }
 
 #[derive(Debug, PartialEq, Clone, Hash, Eq)]
@@ -207,20 +207,37 @@ fn to_wasm(node: &Language) -> String {
                 .collect::<Vec<String>>()
                 .join(" ")
         },
-        Language::Module(name, instructions) => {
-            let value_type = match instructions.last() {
-                Some(instruction) => find_value_type(instruction),
-                None => panic!("No instructions")
+        Language::Module(name, functions, instructions) => {
+
+            let functions_str = functions.into_iter()
+                .map(|function| to_wasm(function) )
+                .collect::<Vec<String>>()
+                .join(" ");
+
+            let main = if instructions.is_empty() {
+                "".to_string()
+            } else {
+                let value_type = match instructions.last() {
+                    Some(instruction) => find_value_type(instruction),
+                    None => panic!("No instructions")
+                };
+
+                let main = Language::Function(
+                    "main".to_string(),
+                    vec![],
+                    vec![value_type.clone()],
+                    instructions.clone()
+                );
+
+                to_wasm(&main)
             };
 
-            let main = Language::Function(
-                "main".to_string(),
-                vec![],
-                vec![value_type.clone()],
-                instructions.clone()
-            );
+            let body = vec![functions_str, main].into_iter()
+                .filter( |x| x != "" )
+                .collect::<Vec<String>>()
+                .join(" ");
 
-            format!("(module ${} {})", name, to_wasm(&main))
+            format!("(module ${} {})", name, body)
         }
     }
 }
@@ -243,7 +260,7 @@ fn find_value_type(node: &Language) -> &ValueType {
                 panic!("No instructions")
             }
         }
-        Language::Module(_, instructions) => {
+        Language::Module(_, _, instructions) => {
             if let Some(instruction) = instructions.last() {
                 find_value_type(instruction) 
             } else {
@@ -380,6 +397,7 @@ fn build_ast(pair: Pair<Rule>, variables: &mut Variables) -> Result<Language, Er
         },
         Rule::module => {
             let mut instructions = vec![];
+            let mut functions = vec![];
 
             let mut inner = pair.into_inner();
 
@@ -387,13 +405,20 @@ fn build_ast(pair: Pair<Rule>, variables: &mut Variables) -> Result<Language, Er
 
             let block = inner.next().unwrap();
 
+            println!("{:?}", block.as_str());
+
             let mut pair = block.into_inner();
 
             while let Some(instruction) = pair.next() {
-                instructions.push(build_ast(instruction, variables)?);
+                let ast = build_ast(instruction, variables)?;
+
+                match ast {
+                    Language::Function(_, _, _, _) => functions.push(ast),
+                    _ => instructions.push(ast)
+                }
             }
 
-            Ok(Language::Module(name, instructions))
+            Ok(Language::Module(name, functions, instructions))
         }
         _ => panic!("WTF")
     }
@@ -642,8 +667,39 @@ mod test {
         end
         ", &mut variables);
 
-        let expected  = Language::Module("awesome".to_string(), vec![Language::Number("42".to_string())]);
+        let expected  = Module("awesome".to_string(), vec![], vec![Number("42".to_string())]);
+
+        let mut variables = HashMap::new();
+
+        let module = to_ast(
+        "module awesome
+            fn tres(): Int
+                3
+            end
+        end", &mut variables);
+
+        let function = Function(
+            "tres".to_string(),
+            vec![],
+            vec![ValueType::Integer],
+            vec![Language::Number("3".to_string())]
+        );
+
+        let expected  = Language::Module("awesome".to_string(), vec![function], vec![]);
 
         assert_eq!(module, Ok(expected));
+        
+        let function = Function(
+            "tres".to_string(),
+            vec![],
+            vec![ValueType::Integer],
+            vec![Language::Number("3".to_string())]
+        );
+
+        let module = Language::Module("awesome".to_string(), vec![function], vec![Number("42".to_string())]);
+
+        let expected = "(module $awesome (func $tres (result i32) (i32.const 3)) (func $main (result i32) (i32.const 42)))";
+
+        assert_eq!(to_wasm(&module), expected);
     }
 }

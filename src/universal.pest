@@ -4,14 +4,14 @@ NEWLINE = _{ "\n" | ";" }
 
 language = _{ module | infix | integer | function_call | function_def | variable_def | variable }
 
-module = { "module" ~ name ~ block ~ NEWLINE ~ "end" }
+module = { "module" ~ name ~ block ~ NEWLINE* ~ "end" }
 
 integer = @{ NUMBER+ }
 
 function_call = { name ~ "(" ~ function_params ~ ")" }
 function_params = { right ~ ("," ~ right)* }
 
-instruction  = _{ infix | variable_def | integer | variable }
+instruction  = _{ infix | integer | function_call | function_def | variable_def | variable }
 
 right = _{ infix | integer | variable }
 left = _{ variable_def | variable | integer }
