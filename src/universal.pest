@@ -2,7 +2,8 @@ WHITESPACE = _{ " " | "\t" | "\r" }
 
 NEWLINE = _{ "\n" | ";" }
 
-language = _{ module | infix | integer | function_call | function_def | variable_def | variable }
+language = _{ NEWLINE* ~ (module | infix | integer | function_call | function_def | variable_def | variable) }
+
 
 module = { "module" ~ name ~ block ~ NEWLINE* ~ "end" }
 
@@ -18,9 +19,10 @@ left = _{ variable_def | variable | integer }
 infix = { left ~ message ~ right }
 message = { "*" | "/" | "+" | "-" | "=" }
 
-function_def = { "fn" ~ name ~ ("(" ~ params? ~ ")")? ~ ":" ~ results ~ block ~ NEWLINE ~ "end" }
+function_def = { "fn" ~ name ~ ("(" ~ params? ~ ")")? ~ ":" ~ results ~ block ~ NEWLINE* ~ "end" }
 
-block = { (NEWLINE* ~ instruction)* }
+block = { (NEWLINE* ~ language)+ }
+
 results = { kind ~ ("," ~ kind)* }
 params = { param ~ ("," ~ param)* }
 param = { variable ~ ":" ~ kind }

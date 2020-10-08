@@ -43,6 +43,7 @@ impl Validator for InputValidator {
 fn main() -> anyhow::Result<()> {
     let validator = InputValidator {};
     let mut rl = Editor::new();
+    let mut lines = String::new();
 
     rl.set_helper(Some(validator));
 
@@ -51,9 +52,13 @@ fn main() -> anyhow::Result<()> {
 
 	match readline {
 	    Ok(line) => {
+                lines.push_str(&format!("{  }\n", line));
+
+                println!("lines: {}", lines);
+
                 let mut variables = HashMap::new();
 
-                let ast = to_ast(&line, &mut variables)?;
+                let ast = to_ast(&lines, &mut variables)?;
 
                 let main = Language::Function(
                     "main".to_string(),
@@ -182,9 +187,6 @@ fn to_wasm(node: &Language) -> String {
                 .map( |(name, value_type)| format!("(local ${} {})", name, value_type_to_wasm(&value_type)) )
                 .collect::<Vec<String>>()
                 .join(" ");
-
-            println!("instructions: {}", instructions);
-            println!("locals: {}", locals);
 
             let body = vec![params_str.to_string(), results.to_string(), locals.to_string(), instructions.to_string()].into_iter()
                 .filter( |x| x != "" )
@@ -405,8 +407,6 @@ fn build_ast(pair: Pair<Rule>, variables: &mut Variables) -> Result<Language, Er
 
             let block = inner.next().unwrap();
 
-            println!("{:?}", block.as_str());
-
             let mut pair = block.into_inner();
 
             while let Some(instruction) = pair.next() {
@@ -420,14 +420,35 @@ fn build_ast(pair: Pair<Rule>, variables: &mut Variables) -> Result<Language, Er
 
             Ok(Language::Module(name, functions, instructions))
         }
-        _ => panic!("WTF")
+        x => panic!("WTF: {:?}", x)
     }
 }
 
 pub fn to_ast(original: &str, variables: &mut Variables) -> Result<Language, Error<Rule>> {
-    let pair = UniversalParser::parse(Rule::language, original)?.next().unwrap();
+    let mut block = vec![];
 
-    build_ast(pair, variables)
+    match UniversalParser::parse(Rule::language, original) {
+        Ok(pairs) => {
+            let mut pair = pairs.into_iter();
+
+            match pair.next() {
+                Some(pair) => {
+                    match build_ast(pair, variables) {
+                        Ok(ast) => block.push(ast),
+                        Err(e) => panic!(e)
+                    }
+                },
+                None => ()
+            }
+        },
+        Err(e) => return Err(e)
+    }
+
+    if block.len() == 1 {
+        Ok(block[0].to_owned())
+    } else {
+        Ok(Language::Block(block))
+    }
 }
 
 fn find_locals(instructions: &Vec<Language>, params: &Params) -> Variables {
@@ -441,8 +462,6 @@ fn find_locals(instructions: &Vec<Language>, params: &Params) -> Variables {
 }
 
 fn find_local<'a>(instruction: &'a Language, variables: &'a mut Variables, params: &Params) -> &'a Variables {
-    println!("{:?}", instruction);
-
     match instruction {
         Language::Variable(name, value_type) => {
             if !name_on_params(&name, params) {
@@ -479,6 +498,10 @@ mod test {
         let mut variables = HashMap::new();
 
         assert_eq!(to_ast("42", &mut variables), Ok(Number("42".to_string())));
+
+        assert_eq!(to_ast("
+                42
+                ", &mut variables), Ok(Number("42".to_string())));
     }
 
     #[test]
