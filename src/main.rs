@@ -14,10 +14,7 @@ extern crate wat;
 mod ast;
 use ast::{
     Language,
-    Operation,
-    Params,
     ValueType,
-    Variables,
     find_value_type,
     to_ast,
 };
@@ -28,10 +25,7 @@ use wasm::{to_wasm};
 use wasmer_runtime::{
     instantiate,
     DynFunc,
-    Value,
     imports,
-    error,
-
 };
 
 use rustyline::error::ReadlineError;
@@ -124,6 +118,8 @@ fn main() -> anyhow::Result<()> {
 mod test {
     use super::*;
     use Language::*;
+
+    use ast::{Operation};
 
     #[test]
     fn constants() {
