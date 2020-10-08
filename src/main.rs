@@ -11,6 +11,16 @@ pub struct UniversalParser;
 
 extern crate wat;
 
+mod ast;
+
+use ast::{
+    Language,
+    Operation,
+    Params,
+    ValueType,
+    Variables,
+};
+
 use wasmer_runtime::{
     instantiate,
     DynFunc,
@@ -104,31 +114,6 @@ fn main() -> anyhow::Result<()> {
     }
 
     return Ok(())
-}
-
-#[derive(Debug, PartialEq, Clone, Hash, Eq)]
-pub enum ValueType {
-    Integer,
-    Float,
-}
-
-type Variables = HashMap<String, ValueType>;
-type Params = Vec<(String, ValueType)>;
-
-#[derive(Debug, PartialEq, Clone, Hash, Eq)]
-pub enum Language {
-    Variable(String, ValueType),
-    Number(String),
-    Infix(Operation, Box<Language>, Box<Language>),
-    Function(String, Params, Vec<ValueType>, Vec<Language>),
-    Call(String, Vec<Language>, ValueType),
-    Block(Vec<Language>),
-    Module(String, Vec<Language>, Vec<Language>),
-}
-
-#[derive(Debug, PartialEq, Clone, Hash, Eq)]
-pub enum Operation {
-    Add,Minus,Mult,Div,Eq
 }
 
 use pest::error::Error;
