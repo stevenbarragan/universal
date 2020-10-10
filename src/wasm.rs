@@ -62,6 +62,9 @@ pub fn to_wasm(node: &Language) -> String {
 
             format!("(func ${} {})", name, body)
         },
+        Language::String(string) => {
+            string.to_string()
+        },
         Language::Call(function_name, params, _) => {
             let params = params.into_iter()
                 .map( |language| to_wasm(language) )
@@ -115,6 +118,7 @@ fn value_type_to_wasm(value_type: &ValueType) -> String {
     match value_type {
         ValueType::Integer => "i32".to_string(),
         ValueType::Float => "f32".to_string(),
+        ValueType::String => "string".to_string(),
     }
 }
 

@@ -2,8 +2,7 @@ WHITESPACE = _{ " " | "\t" | "\r" }
 
 NEWLINE = _{ "\n" | ";" }
 
-language = _{ NEWLINE* ~ (module | infix | integer | function_call | function_def | variable_def | variable) }
-
+language = _{ NEWLINE* ~ (module | string | infix | integer | function_call | function_def | variable_def | variable) }
 
 module = { "module" ~ name ~ block ~ NEWLINE* ~ "end" }
 
@@ -32,5 +31,6 @@ variable = { !reserve_word ~ name }
 kind = { name }
 
 name = @{ LETTER ~ (LETTER | NUMBER)* }
-string = @{ LETTER+ }
-reserve_word = { "end" | "fn" | "module" }
+string = { "\"" ~ string_value ~"\""}
+string_value = { (LETTER | NUMBER)* }
+reserve_word = _{ "end" | "fn" | "module" }

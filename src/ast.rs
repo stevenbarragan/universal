@@ -9,6 +9,7 @@ pub struct UniversalParser;
 pub enum ValueType {
     Integer,
     Float,
+    String,
 }
 
 pub type Variables = HashMap<String, ValueType>;
@@ -32,6 +33,7 @@ pub enum Language {
     Module(String, Vec<Language>, Vec<Language>),
     Number(String),
     Variable(String, ValueType),
+    String(String),
 }
 
 pub fn find_value_type(node: &Language) -> &ValueType {
@@ -58,7 +60,8 @@ pub fn find_value_type(node: &Language) -> &ValueType {
             } else {
                 panic!("No instructions")
             }
-        }
+        },
+        Language::String(_) => &ValueType::String,
     }
 }
 
@@ -205,7 +208,16 @@ fn build_ast(pair: Pair<Rule>, variables: &mut Variables) -> Result<Language, Er
             }
 
             Ok(Language::Module(name, functions, instructions))
-        }
+        },
+        Rule::string => {
+            let mut inner = pair.into_inner();
+
+            let string = inner.next().unwrap();
+
+            println!("{:?}", string);
+
+            Ok(Language::String(string.as_str().to_string()))
+        },
         x => panic!("WTF: {:?}", x)
     }
 }
@@ -214,6 +226,7 @@ fn str_to_value_type(value_type: &str) -> ValueType {
     match value_type {
         "Int" => ValueType::Integer,
         "Float" => ValueType::Float,
+        "String" => ValueType::String,
         _ => panic!("Value type undefined")
     }
 }
@@ -242,5 +255,19 @@ pub fn to_ast(original: &str, variables: &mut Variables) -> Result<Language, Err
         Ok(block[0].to_owned())
     } else {
         Ok(Language::Block(block))
+    }
+}
+
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use Language::*;
+
+    #[test]
+    fn strings() {
+        let mut variables = HashMap::new();
+
+        assert_eq!(to_ast("\"42\"", &mut variables), Ok(String("42".to_string())));
     }
 }
