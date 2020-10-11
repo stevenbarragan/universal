@@ -62,7 +62,7 @@ pub fn to_wasm(node: &Language) -> String {
 
             format!("(func ${} {})", name, body)
         },
-        Language::String(string) => {
+        Language::Symbol(string) => {
             string.to_string()
         },
         Language::Call(function_name, params, _) => {
@@ -80,7 +80,6 @@ pub fn to_wasm(node: &Language) -> String {
                 .join(" ")
         },
         Language::Module(name, functions, instructions) => {
-
             let functions_str = functions.into_iter()
                 .map(|function| to_wasm(function) )
                 .collect::<Vec<String>>()
@@ -118,7 +117,7 @@ fn value_type_to_wasm(value_type: &ValueType) -> String {
     match value_type {
         ValueType::Integer => "i32".to_string(),
         ValueType::Float => "f32".to_string(),
-        ValueType::String => "string".to_string(),
+        ValueType::Symbol => "symbol".to_string(),
     }
 }
 
