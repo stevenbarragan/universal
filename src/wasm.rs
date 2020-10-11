@@ -9,7 +9,13 @@ use crate::ast::{
     find_value_type,
 };
 
-pub fn to_wasm(node: &Language) -> String {
+#[derive(Default)]
+pub struct Data {
+    pointers: HashMap<String, (usize, usize)>,
+    memory: String
+}
+
+pub fn to_wasm(node: &Language, data: &mut Data) -> String {
     match node {
         Language::Variable(name, _) => {
             format!("(local.get ${})", name)
@@ -20,7 +26,7 @@ pub fn to_wasm(node: &Language) -> String {
         Language::Infix(operation, left, right) => {
             if &Operation::Eq == operation {
                 if let Language::Variable(name, _) = left.as_ref() {
-                    return format!("(local.set ${} {})", name, to_wasm(right))
+                    return format!("(local.set ${} {})", name, to_wasm(right, data))
                 }
             }
 
@@ -32,7 +38,7 @@ pub fn to_wasm(node: &Language) -> String {
                 Operation::Eq => "=",
             };
 
-            format!("({}.{} {} {})", value_type_to_wasm(find_value_type(left)), method, to_wasm(left), to_wasm(right))
+            format!("({}.{} {} {})", value_type_to_wasm(find_value_type(left)), method, to_wasm(left, data), to_wasm(right, data))
         },
         Language::Function(name, params, results, block) => {
             let params_str = params.into_iter()
@@ -40,13 +46,12 @@ pub fn to_wasm(node: &Language) -> String {
                 .collect::<Vec<String>>()
                 .join(" ");
 
-            let results = results.into_iter()
-                .map( |value_type| format!("(result {})", value_type_to_wasm(value_type)))
+            let results = results.into_iter() .map( |value_type| format!("(result {})", value_type_to_wasm(value_type)))
                 .collect::<Vec<String>>()
                 .join(" ");
 
             let instructions = block.into_iter()
-                .map( |language| to_wasm(language) )
+                .map( |language| to_wasm(language, data) )
                 .collect::<Vec<String>>()
                 .join(" ");
 
@@ -63,11 +68,21 @@ pub fn to_wasm(node: &Language) -> String {
             format!("(func ${} {})", name, body)
         },
         Language::Symbol(string) => {
-            string.to_string()
+            if let Some(position) = data.pointers.get(string) {
+                format!("(i32.const {}) (i32.const {})", position.0, position.1)
+            } else {
+                let position = (data.memory.len(), string.len());
+
+                data.pointers.insert(string.to_owned(), position);
+
+                data.memory += string;
+
+                format!("(i32.const {}) (i32.const {})", position.0, position.1)
+            }
         },
         Language::Call(function_name, params, _) => {
             let params = params.into_iter()
-                .map( |language| to_wasm(language) )
+                .map( |language| to_wasm(language, data) )
                 .collect::<Vec<String>>()
                 .join(" ");
 
@@ -75,13 +90,13 @@ pub fn to_wasm(node: &Language) -> String {
         },
         Language::Block(instructions) => {
             instructions.into_iter()
-                .map( |language| to_wasm(language) )
+                .map( |language| to_wasm(language, data) )
                 .collect::<Vec<String>>()
                 .join(" ")
         },
         Language::Module(name, functions, instructions) => {
             let functions_str = functions.into_iter()
-                .map(|function| to_wasm(function) )
+                .map( |language| to_wasm(language, data) )
                 .collect::<Vec<String>>()
                 .join(" ");
 
@@ -100,10 +115,16 @@ pub fn to_wasm(node: &Language) -> String {
                     instructions.clone()
                 );
 
-                to_wasm(&main)
+                to_wasm(&main, data)
             };
 
-            let body = vec![functions_str, main].into_iter()
+            let data_str = if data.memory.len() > 0 {
+                format!("(memory (export \"mem\") 1) (data (i32.const 0) \"{}\")", data.memory)
+            } else {
+                "".to_string()
+            };
+
+            let body = vec![data_str, functions_str, main].into_iter()
                 .filter( |x| x != "" )
                 .collect::<Vec<String>>()
                 .join(" ");
@@ -117,7 +138,7 @@ fn value_type_to_wasm(value_type: &ValueType) -> String {
     match value_type {
         ValueType::Integer => "i32".to_string(),
         ValueType::Float => "f32".to_string(),
-        ValueType::Symbol => "symbol".to_string(),
+        ValueType::Symbol => "i32 i32".to_string(),
     }
 }
 
@@ -156,4 +177,29 @@ fn name_on_params(name: &String, params: &Params) -> bool {
     }
 
     false
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use Language::*;
+
+    #[test]
+    fn symbols() {
+        let mut data: Data = Default::default();
+
+        let module = Language::Module("awesome".to_string(), vec![], vec![Symbol("42".to_string())]);
+
+        let expected = "(module $awesome (memory (export \"mem\") 1) (data (i32.const 0) \"42\") (func $main (result i32 i32) (i32.const 0) (i32.const 2)))";
+
+        assert_eq!(to_wasm(&module, &mut data), expected)
+
+        let mut data: Data = Default::default();
+
+        let module = Language::Module("awesome".to_string(), vec![], vec![Symbol("42".to_string()), Symbol("43".to_string())]);
+
+        let expected = "(module $awesome (memory (export \"mem\") 1) (data (i32.const 0) \"4243\") (func $main (result i32 i32) (i32.const 0) (i32.const 2) (i32.const 2) (i32.const 2))))";
+
+        assert_eq!(to_wasm(&module, &mut data), expected)
+    }
 }

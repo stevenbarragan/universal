@@ -20,7 +20,7 @@ use ast::{
 };
 
 mod wasm;
-use wasm::{to_wasm};
+use wasm::{to_wasm, Data};
 
 use wasmer_runtime::{
     instantiate,
@@ -52,6 +52,7 @@ fn main() -> anyhow::Result<()> {
     let validator = InputValidator {};
     let mut rl = Editor::new();
     let mut lines = String::new();
+    let mut data: Data = Default::default();
 
     rl.set_helper(Some(validator));
 
@@ -75,7 +76,7 @@ fn main() -> anyhow::Result<()> {
                     vec![ast]
                     );
 
-		let module_wat = format!("(module {} (export \"main\" (func $main)))", to_wasm(&main));
+		let module_wat = format!("(module {} (export \"main\" (func $main)))", to_wasm(&main, &mut data));
 
                 println!("{:?}", module_wat);
 
@@ -120,6 +121,7 @@ mod test {
     use Language::*;
 
     use ast::{Operation};
+    use wasm::{Data};
 
     #[test]
     fn constants() {
@@ -263,6 +265,8 @@ mod test {
 
     #[test]
     fn function_to_wasm() {
+        let mut data: Data = Default::default();
+
         let function = Function(
             "add2".to_string(),
             vec![("num".to_string(), ValueType::Integer)],
@@ -270,7 +274,7 @@ mod test {
             vec![Infix(Operation::Add, Box::new(Variable ("num".to_string(), ValueType::Integer)), Box::new(Number("2".to_string())))]
         );
 
-        assert_eq!(to_wasm(&function), "(func $add2 (param $num i32) (result i32) (i32.add (local.get $num) (i32.const 2)))");
+        assert_eq!(to_wasm(&function, &mut data), "(func $add2 (param $num i32) (result i32) (i32.add (local.get $num) (i32.const 2)))");
 
         let mut variables = HashMap::new();
 
@@ -281,7 +285,7 @@ mod test {
 
         match function_ast {
             Ok(function) =>  {
-                assert_eq!(to_wasm(&function), "(func $tres (result i32) (local $num i32) (local.set $num (i32.const 3)))");
+                assert_eq!(to_wasm(&function, &mut data), "(func $tres (result i32) (local $num i32) (local.set $num (i32.const 3)))");
             },
             Err(e) => println!("{}", e),
         }
@@ -294,7 +298,7 @@ mod test {
 
         match function_ast {
             Ok(function) =>  {
-                assert_eq!(to_wasm(&function), 
+                assert_eq!(to_wasm(&function, &mut data), 
                     "(func $tres (param $x i32) (result i32) (local $num i32) (local.set $num (i32.const 3)) (i32.add (local.get $x) (local.get $num)))");
             },
             Err(e) => println!("{}", e),
@@ -303,14 +307,16 @@ mod test {
 
     #[test]
     fn assignation_to_wasm() {
+        let mut data: Data = Default::default();
         let assignation = Infix(Operation::Eq, Box::new(Variable ("x".to_string(), ValueType::Integer)), Box::new(Number("1".to_string())));
 
-        assert_eq!(to_wasm(&assignation), "(local.set $x (i32.const 1))")
+        assert_eq!(to_wasm(&assignation, &mut data), "(local.set $x (i32.const 1))")
     }
 
     #[test]
     fn modules() {
         let mut variables = HashMap::new();
+        let mut data: Data = Default::default();
 
         let module = to_ast(
         "module awesome
@@ -351,6 +357,6 @@ mod test {
 
         let expected = "(module $awesome (func $tres (result i32) (i32.const 3)) (func $main (result i32) (i32.const 42)))";
 
-        assert_eq!(to_wasm(&module), expected);
+        assert_eq!(to_wasm(&module, &mut data), expected);
     }
 }

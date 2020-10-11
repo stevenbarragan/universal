@@ -13,6 +13,7 @@ pub enum ValueType {
 }
 
 pub type Variables = HashMap<String, ValueType>;
+
 pub type Params = Vec<(String, ValueType)>;
 
 #[derive(Debug, PartialEq, Clone, Hash, Eq)]
