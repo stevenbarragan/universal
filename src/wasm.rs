@@ -192,13 +192,13 @@ mod test {
 
         let expected = "(module $awesome (memory (export \"mem\") 1) (data (i32.const 0) \"42\") (func $main (result i32 i32) (i32.const 0) (i32.const 2)))";
 
-        assert_eq!(to_wasm(&module, &mut data), expected)
+        assert_eq!(to_wasm(&module, &mut data), expected);
 
         let mut data: Data = Default::default();
 
         let module = Language::Module("awesome".to_string(), vec![], vec![Symbol("42".to_string()), Symbol("43".to_string())]);
 
-        let expected = "(module $awesome (memory (export \"mem\") 1) (data (i32.const 0) \"4243\") (func $main (result i32 i32) (i32.const 0) (i32.const 2) (i32.const 2) (i32.const 2))))";
+        let expected = "(module $awesome (memory (export \"mem\") 1) (data (i32.const 0) \"4243\") (func $main (result i32 i32) (i32.const 0) (i32.const 2) (i32.const 2) (i32.const 2)))";
 
         assert_eq!(to_wasm(&module, &mut data), expected)
     }

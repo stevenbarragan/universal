@@ -225,7 +225,7 @@ fn str_to_value_type(value_type: &str) -> ValueType {
     match value_type {
         "Int" => ValueType::Integer,
         "Float" => ValueType::Float,
-        "String" => ValueType::Symbol,
+        "Symbol" => ValueType::Symbol,
         kind => panic!("Value type {:?} not supported", kind)
     }
 }
