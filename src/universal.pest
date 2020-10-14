@@ -2,25 +2,29 @@ WHITESPACE = _{ " " | "\t" | "\r" }
 
 NEWLINE = _{ "\n" | ";" }
 
-language = _{ NEWLINE* ~ (module | symbol | infix | integer | function_call | function_def | variable_def | variable) }
+language = _{ NEWLINE* ~ (module | symbol | infix | integer | conditional | function_call | function_def | variable_def | variable) }
 
-module = { "module" ~ name ~ block ~ NEWLINE* ~ "end" }
+conditional = { conditional_type ~ instruction ~ block ~ else_block? ~ "end" }
+conditional_type = { "if" | "unless" }
+else_block = _{ "else" ~ block }
+
+module = { "module" ~ name ~ block ~ "end" }
 
 integer = @{ NUMBER+ }
 
 function_call = { name ~ "(" ~ function_params ~ ")" }
 function_params = { right ~ ("," ~ right)* }
 
-instruction  = _{ infix | integer | function_call | function_def | variable_def | variable }
+instruction  = _{ infix | integer | function_call | variable }
 
 right = _{ infix | integer | variable }
 left = _{ variable_def | variable | integer }
 infix = { left ~ message ~ right }
 message = { "*" | "/" | "+" | "-" | "=" }
 
-function_def = { "fn" ~ name ~ ("(" ~ params? ~ ")")? ~ ":" ~ results ~ block ~ NEWLINE* ~ "end" }
+function_def = { "fn" ~ name ~ ("(" ~ params? ~ ")")? ~ ":" ~ results ~ block ~ "end" }
 
-block = { (NEWLINE* ~ language)+ }
+block = { (NEWLINE* ~ language)+ ~ NEWLINE* }
 
 results = { kind ~ ("," ~ kind)* }
 params = { param ~ ("," ~ param)* }
@@ -36,4 +40,4 @@ symbol = { ":" ~ (symbol_value | "\"" ~ string_value ~ "\"") }
 symbol_value = @{ (LETTER | NUMBER)+ }
 string_value = { (LETTER | NUMBER)* }
 
-reserve_word = _{ "end" | "fn" | "module" }
+reserve_word = _{ "end" | "fn" | "module" | "if" | "else" | "unless" }

@@ -130,7 +130,8 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
                 .join(" ");
 
             format!("(module ${} {})", name, body)
-        }
+        },
+        _ => panic!(":(")
     }
 }
 

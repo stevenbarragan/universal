@@ -13,8 +13,8 @@ pub enum ValueType {
 }
 
 pub type Variables = HashMap<String, ValueType>;
-
 pub type Params = Vec<(String, ValueType)>;
+pub type Block = Vec<Language>;
 
 #[derive(Debug, PartialEq, Clone, Hash, Eq)]
 pub enum Operation {
@@ -26,23 +26,27 @@ pub enum Operation {
 }
 
 #[derive(Debug, PartialEq, Clone, Hash, Eq)]
+pub enum ConditionalType {If, Unless}
+
+#[derive(Debug, PartialEq, Clone, Hash, Eq)]
 pub enum Language {
-    Block(Vec<Language>),
-    Call(String, Vec<Language>, ValueType),
-    Function(String, Params, Vec<ValueType>, Vec<Language>),
+    Block(Block),
+    Call(String, Block, ValueType),
+    Function(String, Params, Vec<ValueType>, Block),
     Infix(Operation, Box<Language>, Box<Language>),
-    Module(String, Vec<Language>, Vec<Language>),
+    Module(String, Vec<Language>, Block),
     Number(String),
     Variable(String, ValueType),
     Symbol(String),
+    Conditional(ConditionalType, Box<Language>, Box<Language>, Option<Box<Language>>)
 }
 
 pub fn find_value_type(node: &Language) -> &ValueType {
     match node {
         Language::Variable(_, value_type) => value_type,
         Language::Number(_) => &ValueType::Integer,
-        Language::Infix(operation, left, right) => {
-            find_value_type(left)
+        Language::Infix(_, _, right) => {
+            find_value_type(right)
         },
         Language::Function(_, _, results, _) => {
             &results[0]
@@ -63,6 +67,13 @@ pub fn find_value_type(node: &Language) -> &ValueType {
             }
         },
         Language::Symbol(_) => &ValueType::Symbol,
+        Language::Conditional(_, _, _, instructions) => {
+            if let Some(instruction) = instructions {
+                find_value_type(instruction) 
+            } else {
+                panic!("No instructions")
+            }
+        }
     }
 }
 
@@ -168,6 +179,16 @@ fn build_ast(pair: Pair<Rule>, variables: &mut Variables) -> Result<Language, Er
 
             Ok(Language::Function(name, params, results, instructions))
         },
+        Rule::block => {
+            let mut instructions = vec![];
+            let mut inner = pair.into_inner();
+
+            while let Some(instruction) = inner.next() {
+                instructions.push(build_ast(instruction, variables)?);
+            }
+
+            Ok(Language::Block(instructions))
+        },
         Rule::function_call => {
             let mut inner = pair.into_inner();
 
@@ -216,6 +237,26 @@ fn build_ast(pair: Pair<Rule>, variables: &mut Variables) -> Result<Language, Er
             let string = inner.next().unwrap();
 
             Ok(Language::Symbol(string.as_str().to_string()))
+        },
+        Rule::conditional => {
+            let mut inner = pair.into_inner();
+
+            let kind = match inner.next().unwrap().as_str() {
+                "if" => ConditionalType::If, 
+                "unless" => ConditionalType::Unless, 
+                x => panic!("{} not supported", x)
+            };
+            
+            let instruction = build_ast(inner.next().unwrap(), variables)?;
+            let block = Box::new(build_ast(inner.next().unwrap(), variables)?);
+
+            let block2 = if let Some(else_block) = inner.next() {
+                Some(Box::new(build_ast(else_block, variables)?))
+            } else {
+                None
+            };
+
+            Ok(Language::Conditional(kind, Box::new(instruction), block, block2))
         },
         x => panic!("WTF: {:?}", x)
     }
@@ -269,5 +310,74 @@ mod test {
 
         assert_eq!(to_ast(":42", &mut variables), Ok(Symbol("42".to_string())));
         assert_eq!(to_ast(":\"steven barragan\"", &mut variables), Ok(Symbol("steven barragan".to_string())));
+    }
+
+    #[test]
+    fn conditionals_if() {
+        let mut variables = HashMap::new();
+
+        let program = "
+            if 1
+              1
+            end
+            ";
+
+        let instructions = vec![Number("1".to_string())];
+
+        let expected = Conditional(
+            ConditionalType::If,
+            Box::new(Number("1".to_string())),
+            Box::new(Language::Block(instructions)),
+            None
+        );
+
+        assert_eq!(to_ast(program, &mut variables), Ok(expected));
+    }
+
+    #[test]
+    fn conditionals_unless() {
+        let mut variables = HashMap::new();
+
+        let program = "
+            unless 1
+              2
+            end
+            ";
+
+        let instructions = vec![Number("2".to_string())];
+
+        let expected = Conditional(
+            ConditionalType::Unless,
+            Box::new(Number("1".to_string())),
+            Box::new(Language::Block(instructions)),
+            None
+        );
+
+        assert_eq!(to_ast(program, &mut variables), Ok(expected));
+    }
+
+    #[test]
+    fn conditionals_if_else() {
+        let mut variables = HashMap::new();
+
+        let program = "
+            if 1
+              1
+            else
+              2
+            end
+        ";
+
+        let instructions = vec![Number("1".to_string())];
+        let instructions_2 = vec![Number("2".to_string())];
+
+        let expected = Conditional(
+            ConditionalType::If,
+            Box::new(Number("1".to_string())),
+            Box::new(Language::Block(instructions)),
+            Some(Box::new(Language::Block(instructions_2)))
+        );
+
+        assert_eq!(to_ast(program, &mut variables), Ok(expected));
     }
 }
