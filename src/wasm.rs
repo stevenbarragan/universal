@@ -124,17 +124,17 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
             format!("(module ${} {})", name, body)
         },
         Language::Conditional(conditional_type, instruction, block, block2) => {
-            let conditional = to_wasm(instruction, data);
-            let block = to_wasm(block, data);
+            let conditional_str = to_wasm(instruction, data);
+            let block_str = to_wasm(block, data);
 
             match conditional_type {
                 ConditionalType::If => match block2 {
-                    Some(x) => format!("(if {} (then {}) (else {}))", conditional, block, to_wasm(x, data)),
-                    None => format!("(if {} (then {}))", conditional, block)
+                    Some(x) => format!("(if (result {}) {} (then {}) (else {}))", value_type_to_wasm(find_value_type(block)), conditional_str, block_str, to_wasm(x, data)),
+                    None => format!("(if {} (then {}))", conditional_str, block_str)
                 }
                 ConditionalType::Unless => match block2 {
-                    Some(x) => format!("(if (i32.eqz {}) (then {}) (else {}))", conditional, block, to_wasm(x, data)),
-                    None => format!("(if (i32.eqz {}) (then {}))", conditional, block)
+                    Some(x) => format!("(if (result {}) (i32.eqz {}) (then {}) (else {}))", value_type_to_wasm(find_value_type(block)), conditional_str, block_str, to_wasm(x, data)),
+                    None => format!("(if (i32.eqz {}) (then {}))", conditional_str, block_str)
                 }
             }
         }
@@ -230,8 +230,6 @@ mod test {
 
     #[test]
     fn conditional_if_else() {
-        let instructions = [Number("1".to_string())];
-
         let conditional = Conditional(
             ConditionalType::If,
             Box::new(Number("1".to_string())),
@@ -239,7 +237,7 @@ mod test {
             Some(Box::new(Language::Block(vec![Number("2".to_string())]))),
         );
 
-        let expected = "(if (i32.const 1) (then (i32.const 1)) (else (i32.const 2)))";
+        let expected = "(if (result i32) (i32.const 1) (then (i32.const 1)) (else (i32.const 2)))";
 
         let mut data: Data = Default::default();
 
