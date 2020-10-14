@@ -20,7 +20,7 @@ instruction  = _{ infix | integer | function_call | variable }
 right = _{ infix | integer | variable }
 left = _{ variable_def | variable | integer }
 infix = { left ~ message ~ right }
-message = { "*" | "/" | "+" | "-" | "=" }
+message = { "*" | "/" | "+" | "-" | "==" | "=" }
 
 function_def = { "fn" ~ name ~ ("(" ~ params? ~ ")")? ~ ":" ~ results ~ block ~ "end" }
 

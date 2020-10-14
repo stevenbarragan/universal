@@ -22,7 +22,9 @@ pub enum Operation {
     Minus,
     Mult,
     Div,
-    Eq
+    Assignment,
+    Eq,
+    Native(String)
 }
 
 #[derive(Debug, PartialEq, Clone, Hash, Eq)]
@@ -119,8 +121,9 @@ fn build_ast(pair: Pair<Rule>, variables: &mut Variables) -> Result<Language, Er
                 "-" => Operation::Minus,
                 "*" => Operation::Mult,
                 "/" => Operation::Div,
-                "=" => Operation::Eq,
-                _ => panic!("Operation expected")
+                "=" => Operation::Assignment,
+                "==" => Operation::Eq,
+                other => Operation::Native(other.to_string())
             };
 
             Ok(Language::Infix(operation, Box::new(left), Box::new(right)))
@@ -376,6 +379,26 @@ mod test {
             Box::new(Number("1".to_string())),
             Box::new(Language::Block(instructions)),
             Some(Box::new(Language::Block(instructions_2)))
+        );
+
+        assert_eq!(to_ast(program, &mut variables), Ok(expected));
+    }
+
+    #[test]
+    fn conditionals_if_eq() {
+        let mut variables = HashMap::new();
+
+        let program = "
+            if 1 == 1
+              1
+            end
+            ";
+
+        let expected = Conditional(
+            ConditionalType::If,
+            Box::new(Infix(Operation::Eq, Box::new(Number("1".to_string())), Box::new(Number("1".to_string())))),
+            Box::new(Language::Block(vec![Number("1".to_string())])),
+            None
         );
 
         assert_eq!(to_ast(program, &mut variables), Ok(expected));

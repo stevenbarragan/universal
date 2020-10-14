@@ -16,7 +16,7 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
             format!("(i32.const {})", number)
         },
         Language::Infix(operation, left, right) => {
-            if &Operation::Eq == operation {
+            if &Operation::Assignment == operation {
                 if let Language::Variable(name, _) = left.as_ref() {
                     return format!("(local.set ${} {})", name, to_wasm(right, data))
                 }
@@ -27,7 +27,9 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
                 Operation::Minus => "sub",
                 Operation::Mult => "mul",
                 Operation::Div => "div",
-                Operation::Eq => "=",
+                Operation::Eq => "eq",
+                Operation::Native(op) => op,
+                Operation::Assignment => "set"
             };
 
             format!("({}.{} {} {})", value_type_to_wasm(find_value_type(left)), method, to_wasm(left, data), to_wasm(right, data))

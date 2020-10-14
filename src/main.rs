@@ -172,12 +172,12 @@ mod test {
         let mut variables = HashMap::new();
 
         assert_eq!(to_ast("x: Int = 1", &mut variables),
-            Ok(Infix(Operation::Eq, Box::new(Variable ("x".to_string(), ValueType::Integer)), Box::new(Number("1".to_string())))));
+            Ok(Infix(Operation::Assignment, Box::new(Variable ("x".to_string(), ValueType::Integer)), Box::new(Number("1".to_string())))));
 
         variables.insert("x".to_string(), ValueType::Integer);
 
         assert_eq!(to_ast("x = 1", &mut variables),
-            Ok(Infix(Operation::Eq, Box::new(Variable ("x".to_string(), ValueType::Integer)), Box::new(Number("1".to_string())))));
+            Ok(Infix(Operation::Assignment, Box::new(Variable ("x".to_string(), ValueType::Integer)), Box::new(Number("1".to_string())))));
     }
 
     #[test]
@@ -308,7 +308,7 @@ mod test {
     #[test]
     fn assignation_to_wasm() {
         let mut data: Data = Default::default();
-        let assignation = Infix(Operation::Eq, Box::new(Variable ("x".to_string(), ValueType::Integer)), Box::new(Number("1".to_string())));
+        let assignation = Infix(Operation::Assignment, Box::new(Variable ("x".to_string(), ValueType::Integer)), Box::new(Number("1".to_string())));
 
         assert_eq!(to_wasm(&assignation, &mut data), "(local.set $x (i32.const 1))")
     }
