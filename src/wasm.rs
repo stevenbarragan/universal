@@ -1,13 +1,5 @@
 use std::collections::HashMap;
-
-use crate::ast::{
-    Language,
-    Operation,
-    Params,
-    ValueType,
-    Variables,
-    find_value_type,
-};
+use crate::ast::*;
 
 #[derive(Default)]
 pub struct Data {
@@ -131,7 +123,21 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
 
             format!("(module ${} {})", name, body)
         },
-        _ => panic!(":(")
+        Language::Conditional(conditional_type, instruction, block, block2) => {
+            let conditional = to_wasm(instruction, data);
+            let block = to_wasm(block, data);
+
+            match conditional_type {
+                ConditionalType::If => match block2 {
+                    Some(x) => format!("(if {} (then {}) (else {}))", conditional, block, to_wasm(x, data)),
+                    None => format!("(if {} (then {}))", conditional, block)
+                }
+                ConditionalType::Unless => match block2 {
+                    Some(x) => format!("(if (i32.eqz {}) (then {}) (else {}))", conditional, block, to_wasm(x, data)),
+                    None => format!("(if (i32.eqz {}) (then {}))", conditional, block)
+                }
+            }
+        }
     }
 }
 
@@ -202,5 +208,59 @@ mod test {
         let expected = "(module $awesome (memory (export \"mem\") 1) (data (i32.const 0) \"4243\") (func $main (result i32 i32) (i32.const 0) (i32.const 2) (i32.const 2) (i32.const 2)))";
 
         assert_eq!(to_wasm(&module, &mut data), expected)
+    }
+
+    #[test]
+    fn conditional_if() {
+        let instructions = vec![Number("1".to_string())];
+
+        let conditional = Conditional(
+            ConditionalType::If,
+            Box::new(Number("1".to_string())),
+            Box::new(Language::Block(instructions)),
+            None
+        );
+
+        let expected = "(if (i32.const 1) (then (i32.const 1)))";
+
+        let mut data: Data = Default::default();
+
+        assert_eq!(to_wasm(&conditional, &mut data), expected);
+    }
+
+    #[test]
+    fn conditional_if_else() {
+        let instructions = [Number("1".to_string())];
+
+        let conditional = Conditional(
+            ConditionalType::If,
+            Box::new(Number("1".to_string())),
+            Box::new(Language::Block(vec![Number("1".to_string())])),
+            Some(Box::new(Language::Block(vec![Number("2".to_string())]))),
+        );
+
+        let expected = "(if (i32.const 1) (then (i32.const 1)) (else (i32.const 2)))";
+
+        let mut data: Data = Default::default();
+
+        assert_eq!(to_wasm(&conditional, &mut data), expected);
+    }
+
+    #[test]
+    fn conditional_unless() {
+        let instructions = vec![Number("1".to_string())];
+
+        let conditional = Conditional(
+            ConditionalType::Unless,
+            Box::new(Number("1".to_string())),
+            Box::new(Language::Block(instructions)),
+            None
+        );
+
+        let expected = "(if (i32.eqz (i32.const 1)) (then (i32.const 1)))";
+
+        let mut data: Data = Default::default();
+
+        assert_eq!(to_wasm(&conditional, &mut data), expected);
     }
 }
