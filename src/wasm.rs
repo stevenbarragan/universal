@@ -4,8 +4,10 @@ use crate::ast::*;
 #[derive(Default)]
 pub struct Data {
     pointers: HashMap<String, (usize, usize)>,
-    memory: String
+    memory: String,
+    variables: Variables,
 }
+
 
 pub fn to_wasm(node: &Language, data: &mut Data) -> String {
     match node {
@@ -17,8 +19,10 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
         },
         Language::Infix(operation, left, right) => {
             if &Operation::Assignment == operation {
-                if let Language::Variable(name, _) = left.as_ref() {
-                    return format!("(local.set ${} {})", name, to_wasm(right, data))
+                if let Language::Variable(name, value_type) = left.as_ref() {
+                    data.variables.insert(name.to_string(), value_type.clone());
+
+                    return format!("(local.set ${} {})", name, to_wasm(right, data));
                 }
             }
 
@@ -49,7 +53,7 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
                 .collect::<Vec<String>>()
                 .join(" ");
 
-            let locals = find_locals(&block, &params).into_iter()
+            let locals = data.variables.iter()
                 .map( |(name, value_type)| format!("(local ${} {})", name, value_type_to_wasm(&value_type)) )
                 .collect::<Vec<String>>()
                 .join(" ");
@@ -148,44 +152,8 @@ fn value_type_to_wasm(value_type: &ValueType) -> String {
         ValueType::Integer => "i32".to_string(),
         ValueType::Float => "f32".to_string(),
         ValueType::Symbol => "i32 i32".to_string(),
+        ValueType::Native(name) => name.to_string(),
     }
-}
-
-fn find_locals(instructions: &Vec<Language>, params: &Params) -> Variables {
-    let mut variables: Variables = HashMap::new();
-
-    for instruction in instructions.iter() {
-        find_local(instruction, &mut variables, &params);
-    }
-
-    variables
-}
-
-fn find_local<'a>(instruction: &'a Language, variables: &'a mut Variables, params: &Params) -> &'a Variables {
-    match instruction {
-        Language::Variable(name, value_type) => {
-            if !name_on_params(&name, params) {
-                variables.insert(name.to_string(), value_type.clone());
-            }
-        },
-        Language::Infix(_, left, right) => {
-            find_local(left, variables, params);
-            find_local(right, variables, params);
-        }
-        _ => ()
-    }
-
-    variables
-}
-
-fn name_on_params(name: &String, params: &Params) -> bool {
-    for (params_name, _) in params.into_iter() {
-        if name == params_name {
-            return true
-        }
-    }
-
-    false
 }
 
 #[cfg(test)]
