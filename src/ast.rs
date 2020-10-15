@@ -10,6 +10,7 @@ pub enum ValueType {
     Integer,
     Float,
     Symbol,
+    Native(String)
 }
 
 pub type Variables = HashMap<String, ValueType>;
@@ -270,7 +271,7 @@ fn str_to_value_type(value_type: &str) -> ValueType {
         "Int" => ValueType::Integer,
         "Float" => ValueType::Float,
         "Symbol" => ValueType::Symbol,
-        kind => panic!("Value type {:?} not supported", kind)
+        kind => ValueType::Native(kind.to_string())
     }
 }
 
