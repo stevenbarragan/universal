@@ -63,20 +63,13 @@ fn main() -> anyhow::Result<()> {
 	    Ok(line) => {
                 lines.push_str(&format!("{  }\n", line));
 
-                println!("lines: {}", lines);
+                let module = format!("module comandline {} end", lines);
 
                 let mut variables = HashMap::new();
 
-                let ast = to_ast(&lines, &mut variables)?;
+                let ast = to_ast(&module, &mut variables)?;
 
-                let main = Language::Function(
-                    "main".to_string(),
-                    vec![],
-                    vec![find_value_type(&ast).clone()],
-                    vec![ast]
-                    );
-
-		let module_wat = format!("(module {} (export \"main\" (func $main)))", to_wasm(&main, &mut data));
+		let module_wat = to_wasm(&ast, &mut data);
 
                 println!("{:?}", module_wat);
 

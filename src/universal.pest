@@ -4,7 +4,7 @@ NEWLINE = _{ "\n" | ";" }
 
 language = _{ NEWLINE* ~ (module | symbol | infix | integer | conditional | function_call | function_def | variable_def | variable) }
 
-conditional = { conditional_type ~ instruction ~ block ~ else_block? ~ "end" }
+conditional = { conditional_type ~ operation ~ block ~ else_block? ~ "end" }
 conditional_type = { "if" | "unless" }
 else_block = _{ "else" ~ block }
 
@@ -13,9 +13,9 @@ module = { "module" ~ name ~ block ~ "end" }
 integer = @{ NUMBER+ }
 
 function_call = { name ~ "(" ~ function_params ~ ")" }
-function_params = { right ~ ("," ~ right)* }
+function_params = { operation ~ ("," ~ operation)* }
 
-instruction  = _{ infix | integer | function_call | variable }
+operation  = _{ infix | integer | function_call | variable }
 
 right = _{ infix | integer | variable }
 left = _{ variable_def | variable | integer }
