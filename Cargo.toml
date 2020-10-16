@@ -7,10 +7,11 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+anyhow = "1.0.32"
 pest = "2.1"
 pest_derive = "2.1"
 rustyline = "6.3.0"
 rustyline-derive = "0.2.0"
-anyhow = "1.0.32"
-wasmer-runtime = "0.17.1"
-wat = "1.0"
+wasmer = { git = "https://github.com/wasmerio/wasmer", features = ["cranelift"] }
+wasmer-compiler-cranelift = { git = "https://github.com/wasmerio/wasmer"  }
+wasmer-engine-jit = { git = "https://github.com/wasmerio/wasmer"  }
