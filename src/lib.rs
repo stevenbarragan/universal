@@ -1,35 +1,29 @@
-mod wasm;
-mod ast;
+pub mod compiler;
+pub mod ast;
+pub mod wasm;
 
-#[macro_use]
-extern crate pest_derive;
-
-use std::collections::HashMap;
 use wasmer::{Store, Module, Instance, Value, imports, Function, WasmPtr, Array};
 use wasmer_compiler_cranelift::Cranelift;
 use wasmer_engine_jit::JIT;
 use std::fs;
 use std::str;
-use wasm::{to_wasm, Data};
 
-use ast::{to_ast};
+use compiler::compile;
 
-pub fn execute_file(filename: &str) -> anyhow::Result<()> { let file = fs::read_to_string(filename) .expect("Something went wrong reading the file");
+extern crate pest;
+#[macro_use]
+extern crate pest_derive;
 
-    execute(&format!("(module {}\n{})", filename, file))
-}
+pub fn execute_file(filename: &str) -> anyhow::Result<()> {
+    let file = fs::read_to_string(filename).expect("Something went wrong reading the file");
 
-pub fn compile(string: &str) -> anyhow::Result<String> {
-    let mut variables = HashMap::new();
-    let mut data: Data = Default::default();
-
-    let ast = to_ast(string, &mut variables)?;
-
-    Ok(to_wasm(&ast, &mut data))
+    execute(&format!("module awesome\n{} end", file))
 }
 
 pub fn execute(string: &str) -> anyhow::Result<()> {
     let wasm = compile(string)?;
+
+    println!("{:?}", wasm);
 
     let compiler = Cranelift::default();
     let store = Store::new(&JIT::new(&compiler).engine());

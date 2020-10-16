@@ -6,7 +6,6 @@ use pest::Parser;
 #[grammar = "universal.pest"]
 pub struct UniversalParser;
 
-
 #[derive(Debug, PartialEq, Clone, Hash, Eq)]
 pub enum ValueType {
     Integer,

@@ -83,7 +83,7 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
                 .collect::<Vec<String>>()
                 .join(" ");
 
-            format!("call(${}, {})", function_name, params)
+            format!("(call ${} {})", function_name, params)
         },
         Language::Block(instructions) => {
             instructions.into_iter()
