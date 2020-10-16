@@ -8,7 +8,6 @@ pub struct Data {
     variables: Variables,
 }
 
-
 pub fn to_wasm(node: &Language, data: &mut Data) -> String {
     match node {
         Language::Variable(name, _) => {
@@ -122,7 +121,14 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
                 "".to_string()
             };
 
-            let body = vec![data_str, functions_str, main].into_iter()
+            let exports = ["main"];
+
+            let exports_str = exports.iter()
+                .map( |export| format!("(export \"main\" (func $main))") )
+                .collect::<Vec<String>>()
+                .join(" ");
+
+            let body = vec![data_str, functions_str, main, exports_str].into_iter()
                 .filter( |x| x != "" )
                 .collect::<Vec<String>>()
                 .join(" ");
@@ -160,6 +166,103 @@ fn value_type_to_wasm(value_type: &ValueType) -> String {
 mod test {
     use super::*;
     use Language::*;
+
+    #[test]
+    fn function_to_wasm() {
+        let mut data: Data = Default::default();
+
+        let function = Function(
+            "add2".to_string(),
+            vec![("num".to_string(), ValueType::Integer)],
+            vec![ValueType::Integer],
+            vec![Infix(Operation::Add, Box::new(Variable ("num".to_string(), ValueType::Integer)), Box::new(Number("2".to_string())))]
+        );
+
+        assert_eq!(to_wasm(&function, &mut data), "(func $add2 (param $num i32) (result i32) (i32.add (local.get $num) (i32.const 2)))");
+
+        let mut variables = HashMap::new();
+
+        let function_ast = to_ast(
+        "fn tres: Int
+            num: Int = 3
+        end", &mut variables);
+
+        match function_ast {
+            Ok(function) =>  {
+                assert_eq!(to_wasm(&function, &mut data), "(func $tres (result i32) (local $num i32) (local.set $num (i32.const 3)))");
+            },
+            Err(e) => println!("{}", e),
+        }
+
+        let function_ast = to_ast(
+        "fn tres(x: Int): Int
+            num: Int = 3
+            x + num
+        end", &mut variables);
+
+        match function_ast {
+            Ok(function) =>  {
+                assert_eq!(to_wasm(&function, &mut data), 
+                    "(func $tres (param $x i32) (result i32) (local $num i32) (local.set $num (i32.const 3)) (i32.add (local.get $x) (local.get $num)))");
+            },
+            Err(e) => println!("{}", e),
+        }
+    }
+
+    #[test]
+    fn assignation_to_wasm() {
+        let mut data: Data = Default::default();
+        let assignation = Infix(Operation::Assignment, Box::new(Variable ("x".to_string(), ValueType::Integer)), Box::new(Number("1".to_string())));
+
+        assert_eq!(to_wasm(&assignation, &mut data), "(local.set $x (i32.const 1))")
+    }
+
+    #[test]
+    fn modules() {
+        let mut variables = HashMap::new();
+        let mut data: Data = Default::default();
+
+        let module = to_ast(
+        "module awesome
+            42
+        end
+        ", &mut variables);
+
+        let expected  = Module("awesome".to_string(), vec![], vec![Number("42".to_string())]);
+
+        let mut variables = HashMap::new();
+
+        let module = to_ast(
+        "module awesome
+            fn tres(): Int
+                3
+            end
+        end", &mut variables);
+
+        let function = Function(
+            "tres".to_string(),
+            vec![],
+            vec![ValueType::Integer],
+            vec![Language::Number("3".to_string())]
+        );
+
+        let expected  = Language::Module("awesome".to_string(), vec![function], vec![]);
+
+        assert_eq!(module, Ok(expected));
+        
+        let function = Function(
+            "tres".to_string(),
+            vec![],
+            vec![ValueType::Integer],
+            vec![Language::Number("3".to_string())]
+        );
+
+        let module = Language::Module("awesome".to_string(), vec![function], vec![Number("42".to_string())]);
+
+        let expected = "(module $awesome (func $tres (result i32) (i32.const 3)) (func $main (result i32) (i32.const 42)))";
+
+        assert_eq!(to_wasm(&module, &mut data), expected);
+    }
 
     #[test]
     fn symbols() {

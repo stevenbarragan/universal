@@ -1,9 +1,11 @@
 use std::collections::HashMap;
+
 use pest::Parser;
 
 #[derive(Parser)]
 #[grammar = "universal.pest"]
 pub struct UniversalParser;
+
 
 #[derive(Debug, PartialEq, Clone, Hash, Eq)]
 pub enum ValueType {
@@ -307,6 +309,147 @@ pub fn to_ast(original: &str, variables: &mut Variables) -> Result<Language, Err
 mod test {
     use super::*;
     use Language::*;
+
+    #[test]
+    fn constants() {
+        let mut variables = HashMap::new();
+
+        assert_eq!(to_ast("42", &mut variables), Ok(Number("42".to_string())));
+
+        assert_eq!(to_ast("
+                42
+                ", &mut variables), Ok(Number("42".to_string())));
+    }
+
+    #[test]
+    fn variables() {
+        let mut variables = HashMap::new();
+
+        assert_eq!(to_ast("x: Int", &mut variables), Ok(Variable("x".to_string(), ValueType::Integer)));
+
+        variables.insert("x".to_string(), ValueType::Integer);
+
+        assert_eq!(to_ast("x", &mut variables), Ok(Variable("x".to_string(), ValueType::Integer)));
+    }
+
+    #[test]
+    fn function_call() {
+        let mut variables = HashMap::new();
+
+        variables.insert("add".to_string(), ValueType::Integer);
+
+        assert_eq!(to_ast("add(1)", &mut variables), Ok(Call("add".to_string(), vec![Number("1".to_string())], ValueType::Integer)));
+    }
+
+    #[test]
+    fn operations() {
+        let mut variables = HashMap::new();
+
+        assert_eq!(to_ast("5 + 2", &mut variables),
+            Ok(Infix( Operation::Add, Box::new(Number("5".to_string())), Box::new(Number("2".to_string())))));
+
+        variables.insert("x".to_string(), ValueType::Integer);
+
+        assert_eq!(to_ast("x + 1", &mut variables),
+            Ok(Infix(Operation::Add, Box::new(Variable ("x".to_string(), ValueType::Integer)), Box::new(Number("1".to_string())))));
+    }
+
+    #[test]
+    fn assignations() {
+        let mut variables = HashMap::new();
+
+        assert_eq!(to_ast("x: Int = 1", &mut variables),
+            Ok(Infix(Operation::Assignment, Box::new(Variable ("x".to_string(), ValueType::Integer)), Box::new(Number("1".to_string())))));
+
+        variables.insert("x".to_string(), ValueType::Integer);
+
+        assert_eq!(to_ast("x = 1", &mut variables),
+            Ok(Infix(Operation::Assignment, Box::new(Variable ("x".to_string(), ValueType::Integer)), Box::new(Number("1".to_string())))));
+    }
+
+    #[test]
+    fn functions() {
+        let mut variables = HashMap::new();
+
+        let result = to_ast(
+        "fn hello: Int
+            42
+        end", &mut variables);
+
+        let expected = Function(
+            "hello".to_string(),
+            vec![],
+            vec![ValueType::Integer],
+            vec![Number("42".to_string())]
+        );
+
+        assert_eq!(result, Ok(expected));
+
+        let mut variables = HashMap::new();
+
+        let result = to_ast(
+        "fn hello(num: Int): Int
+          42
+        end", &mut variables);
+
+        let expected = Function(
+            "hello".to_string(),
+            vec![("num".to_string(), ValueType::Integer)],
+            vec![ValueType::Integer],
+            vec![Number("42".to_string())]
+        );
+
+        assert_eq!(result, Ok(expected));
+
+        let mut variables = HashMap::new();
+
+        let result = to_ast(
+        "fn hello(num: Int): Int
+            num
+        end", &mut variables);
+
+        let expected = Function(
+            "hello".to_string(),
+            vec![("num".to_string(), ValueType::Integer)],
+            vec![ValueType::Integer],
+            vec![Variable("num".to_string(), ValueType::Integer)]
+        );
+
+        assert_eq!(result, Ok(expected));
+
+        let mut variables = HashMap::new();
+
+        let result = to_ast(
+        "fn hello(num: Int): Int
+            num + 2
+        end", &mut variables);
+
+        let expected = Function(
+            "hello".to_string(),
+            vec![("num".to_string(), ValueType::Integer)],
+            vec![ValueType::Integer],
+            vec![Infix(Operation::Add, Box::new(Variable ("num".to_string(), ValueType::Integer)), Box::new(Number("2".to_string())))]
+        );
+
+        assert_eq!(result, Ok(expected));
+
+        let mut variables = HashMap::new();
+
+        let result = to_ast(
+        "fn add(num: Int, num2: Int): Int
+            num + num2
+        end", &mut variables);
+
+        let expected = Function(
+            "add".to_string(),
+            vec![("num".to_string(), ValueType::Integer), ("num2".to_string(), ValueType::Integer)],
+            vec![ValueType::Integer],
+            vec![Infix(Operation::Add, Box::new(Variable ("num".to_string(), ValueType::Integer)), Box::new(Variable ("num2".to_string(), ValueType::Integer)))]
+        );
+
+        assert_eq!(result, Ok(expected));
+    }
+
 
     #[test]
     fn strings() {
