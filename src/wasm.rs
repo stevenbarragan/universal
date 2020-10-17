@@ -124,7 +124,7 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
             let exports = ["main"];
 
             let exports_str = exports.iter()
-                .map( |export| format!("(export \"main\" (func $main))") )
+                .map( |export| format!("(export \"{}\" (func ${}))", export, export) )
                 .collect::<Vec<String>>()
                 .join(" ");
 
