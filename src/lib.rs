@@ -33,14 +33,14 @@ pub fn execute(string: &str) -> anyhow::Result<()> {
     let instance = Instance::new(&module, &import_object)?;
 
     let main = instance.exports.get_function("main")?;
-    let memory = instance.exports.get_memory("mem")?;
     let result = main.call(&[])?;
 
     println!("{:?}", result);
 
-    unsafe {
-        println!("{:?}", str::from_utf8(&memory.data_unchecked()[0..2]));
-    }
+    // let memory = instance.exports.get_memory("mem")?;
+    // unsafe {
+    //     println!("{:?}", str::from_utf8(&memory.data_unchecked()[0..2]));
+    // }
 
     Ok(())
 }

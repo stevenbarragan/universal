@@ -259,7 +259,7 @@ mod test {
 
         let module = Language::Module("awesome".to_string(), vec![function], vec![Number("42".to_string())]);
 
-        let expected = "(module $awesome (func $tres (result i32) (i32.const 3)) (func $main (result i32) (i32.const 42)))";
+        let expected = "(module $awesome (func $tres (result i32) (i32.const 3)) (func $main (result i32) (i32.const 42)) (export \"main\" (func $main)))";
 
         assert_eq!(to_wasm(&module, &mut data), expected);
     }
@@ -270,7 +270,7 @@ mod test {
 
         let module = Language::Module("awesome".to_string(), vec![], vec![Symbol("42".to_string())]);
 
-        let expected = "(module $awesome (memory (export \"mem\") 1) (data (i32.const 0) \"42\") (func $main (result i32 i32) (i32.const 0) (i32.const 2)))";
+        let expected = "(module $awesome (memory (export \"mem\") 1) (data (i32.const 0) \"42\") (func $main (result i32 i32) (i32.const 0) (i32.const 2)) (export \"main\" (func $main)))";
 
         assert_eq!(to_wasm(&module, &mut data), expected);
 
@@ -278,7 +278,7 @@ mod test {
 
         let module = Language::Module("awesome".to_string(), vec![], vec![Symbol("42".to_string()), Symbol("43".to_string())]);
 
-        let expected = "(module $awesome (memory (export \"mem\") 1) (data (i32.const 0) \"4243\") (func $main (result i32 i32) (i32.const 0) (i32.const 2) (i32.const 2) (i32.const 2)))";
+        let expected = "(module $awesome (memory (export \"mem\") 1) (data (i32.const 0) \"4243\") (func $main (result i32 i32) (i32.const 0) (i32.const 2) (i32.const 2) (i32.const 2)) (export \"main\" (func $main)))";
 
         assert_eq!(to_wasm(&module, &mut data), expected)
     }

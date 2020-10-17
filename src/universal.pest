@@ -1,30 +1,33 @@
-WHITESPACE = _{ " " | "\t" | "\r" }
+language = _{ NEWLINE* ~ (module | expression | function_def) }
 
-NEWLINE = _{ "\n" | ";" }
+expression = { boolean ~ (boolean_operator ~ boolean)*  }
+boolean_operator = { "==" | "!=" | "<" | ">" | "<=" | ">=" }
+boolean = { summand ~ (summand_operator ~ summand)* }
+summand_operator = { "+" | "-" }
+summand = { unary ~ (factor_operator ~ unary)*  }
+factor_operator = { "*" | "/" }
+unary = { (unary_operator ~ primary) | primary }
+unary_operator = { "!" | "-" }
+primary = { "(" ~ expression ~ ")" | assignation | endvalues }
+endvalues  = _{ symbol | integer | conditional | function_call | variable }
 
-language = _{ NEWLINE* ~ (module | symbol | infix | integer | conditional | function_call | function_def | variable_def | variable) }
+assignation = { (variable_def | variable) ~ "=" ~ expression }
 
-conditional = { conditional_type ~ operation ~ block ~ else_block? ~ "end" }
+conditional = { conditional_type ~ expression ~ block ~ else_block? ~ "end" }
 conditional_type = { "if" | "unless" }
 else_block = _{ "else" ~ block }
 
-module = { "module" ~ name ~ block ~ "end" }
+module = { "module" ~ name ~ module_block ~ "end" }
+module_block = { (NEWLINE* ~ (expression | function_def))+ ~ NEWLINE* }
 
 integer = @{ NUMBER+ }
 
 function_call = { name ~ "(" ~ function_params ~ ")" }
-function_params = { operation ~ ("," ~ operation)* }
-
-operation  = _{ infix | integer | function_call | variable }
-
-right = _{ infix | integer | variable }
-left = _{ variable_def | variable | integer }
-infix = { left ~ message ~ right }
-message = { "*" | "/" | "+" | "-" | "==" | "=" }
+function_params = { primary ~ ("," ~ primary)* }
 
 function_def = { "fn" ~ name ~ ("(" ~ params? ~ ")")? ~ ":" ~ results ~ block ~ "end" }
 
-block = { (NEWLINE* ~ language)+ ~ NEWLINE* }
+block = { (NEWLINE* ~ expression)+ ~ NEWLINE* }
 
 results = { kind ~ ("," ~ kind)* }
 params = { param ~ ("," ~ param)* }
@@ -41,3 +44,6 @@ symbol_value = @{ (LETTER | NUMBER)+ }
 string_value = { (LETTER | NUMBER)* }
 
 reserve_word = _{ "end" | "fn" | "module" | "if" | "else" | "unless" }
+
+WHITESPACE = _{ " " | "\t" | "\r" }
+NEWLINE = _{ "\n" | ";" }

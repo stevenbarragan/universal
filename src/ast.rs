@@ -82,7 +82,7 @@ pub fn find_value_type(node: &Language) -> &ValueType {
 }
 
 use pest::error::Error;
-use pest::iterators::Pair;
+use pest::iterators::{Pair,Pairs};
 
 fn build_ast(pair: Pair<Rule>, variables: &mut Variables) -> Result<Language, Error<Rule>> {
     match pair.as_rule() {
@@ -112,23 +112,22 @@ fn build_ast(pair: Pair<Rule>, variables: &mut Variables) -> Result<Language, Er
 
             Ok(Language::Variable(name, value_type))
         },
-        Rule::infix => {
+        Rule::unary => {
+            parse_expression(&mut pair.into_inner(), variables)
+        },
+        Rule::boolean => {
+            parse_expression(&mut pair.into_inner(), variables)
+        },
+        Rule::expression => {
+            parse_expression(&mut pair.into_inner(), variables)
+        },
+        Rule::summand => {
+            parse_expression(&mut pair.into_inner(), variables)
+        },
+        Rule::primary => {
             let mut inner = pair.into_inner();
-            let left = build_ast(inner.next().unwrap(), variables)?;
-            let message = inner.next().unwrap().as_str();
-            let right = build_ast(inner.next().unwrap(), variables)?;
 
-            let operation = match message {
-                "+" => Operation::Add,
-                "-" => Operation::Minus,
-                "*" => Operation::Mult,
-                "/" => Operation::Div,
-                "=" => Operation::Assignment,
-                "==" => Operation::Eq,
-                other => Operation::Native(other.to_string())
-            };
-
-            Ok(Language::Infix(operation, Box::new(left), Box::new(right)))
+            build_ast(inner.next().unwrap(), variables)
         },
         Rule::function_def => {
             let mut inner = pair.into_inner();
@@ -263,6 +262,14 @@ fn build_ast(pair: Pair<Rule>, variables: &mut Variables) -> Result<Language, Er
 
             Ok(Language::Conditional(kind, Box::new(instruction), block, block2))
         },
+        Rule::assignation => {
+            let mut inner = pair.into_inner();
+
+            let left = build_ast(inner.next().unwrap(), variables)?;
+            let right = build_ast(inner.next().unwrap(), variables)?;
+
+            Ok(Language::Infix(Operation::Assignment, Box::new(left), Box::new(right)))
+        },
         x => panic!("WTF: {:?}", x)
     }
 }
@@ -303,6 +310,50 @@ pub fn to_ast(original: &str, variables: &mut Variables) -> Result<Language, Err
     }
 }
 
+fn parse_expression(inner: &mut Pairs<Rule>, variables: &mut Variables) -> Result<Language, Error<Rule>> {
+    let summand = build_ast(inner.next().unwrap(), variables)?;
+
+    match inner.next() {
+        Some(operator) => {
+            match inner.next() {
+                Some(pair) => {
+                    let summand2 = build_ast(pair, variables)?;
+
+                    let instruction = Language::Infix(
+                        str_operator_to_enum(operator.as_str()),
+                        Box::new(summand),
+                        Box::new(summand2)
+                    );
+
+                    match inner.next() {
+                        Some(second_operator) => {
+                            Ok(Language::Infix(
+                                    str_operator_to_enum(second_operator.as_str()),
+                                    Box::new(instruction),
+                                    Box::new(parse_expression(inner, variables)?)
+                            ))
+                        },
+                        None => Ok(instruction)
+                    }
+                }
+                None => panic!("seccond summand missing")
+            }
+        }
+        None => Ok(summand)
+    }
+}
+
+fn str_operator_to_enum(operator: &str) -> Operation {
+    match operator {
+        "+" => Operation::Add,
+        "-" => Operation::Minus,
+        "*" => Operation::Mult,
+        "/" => Operation::Div,
+        "=" => Operation::Assignment,
+        "==" => Operation::Eq,
+        native => Operation::Native(native.to_string())
+    }
+}
 
 #[cfg(test)]
 mod test {
@@ -324,11 +375,26 @@ mod test {
     fn variables() {
         let mut variables = HashMap::new();
 
-        assert_eq!(to_ast("x: Int", &mut variables), Ok(Variable("x".to_string(), ValueType::Integer)));
-
         variables.insert("x".to_string(), ValueType::Integer);
 
         assert_eq!(to_ast("x", &mut variables), Ok(Variable("x".to_string(), ValueType::Integer)));
+    }
+
+    #[test]
+    fn infix() {
+        let mut variables = HashMap::new();
+
+        let instruction = "1 + 2 - 3";
+        let expected = Infix(
+            Operation::Minus,
+            Box::new(Infix(Operation::Add,
+                Box::new(Number("1".to_string())),
+                Box::new(Number("2".to_string())),
+            )),
+            Box::new(Number("3".to_string()))
+        );
+
+        assert_eq!(to_ast(instruction, &mut variables), Ok(expected))
     }
 
     #[test]
