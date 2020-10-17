@@ -1,7 +1,7 @@
 language = _{ NEWLINE* ~ (module | expression | function_def) }
 
 expression = { boolean ~ (boolean_operator ~ boolean)*  }
-boolean_operator = { "==" | "!=" | "<" | ">" | "<=" | ">=" }
+boolean_operator = { "==" | "!=" | "<" | ">" | "<=" | ">=" | "min" | "max" }
 boolean = { summand ~ (summand_operator ~ summand)* }
 summand_operator = { "+" | "-" }
 summand = { unary ~ (factor_operator ~ unary)*  }

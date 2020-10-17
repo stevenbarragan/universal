@@ -24,8 +24,19 @@ pub enum Operation {
     Minus,
     Mult,
     Div,
+    Exp,
     Assignment,
-    Eq,
+    Equal,
+    And,
+    Or,
+    XOr,
+    NotEq,
+    LessThan,
+    MoreThan,
+    LessThanOrEq,
+    MoreThanOrEq,
+    Min,
+    Max,
     Native(String)
 }
 
@@ -349,9 +360,19 @@ fn str_operator_to_enum(operator: &str) -> Operation {
         "-" => Operation::Minus,
         "*" => Operation::Mult,
         "/" => Operation::Div,
+        "^" => Operation::Exp,
         "=" => Operation::Assignment,
-        "==" => Operation::Eq,
-        native => Operation::Native(native.to_string())
+        "==" => Operation::Equal,
+        "&&" => Operation::And,
+        "||" => Operation::Or,
+        "!=" => Operation::NotEq,
+        "<" => Operation::LessThan,
+        ">" => Operation::MoreThan,
+        "<=" => Operation::LessThanOrEq,
+        ">=" => Operation::MoreThanOrEq,
+        "min" => Operation::Min,
+        "max" => Operation::Max,
+        op => Operation::Native(op.to_string())
     }
 }
 
@@ -605,7 +626,7 @@ mod test {
 
         let expected = Conditional(
             ConditionalType::If,
-            Box::new(Infix(Operation::Eq, Box::new(Number("1".to_string())), Box::new(Number("1".to_string())))),
+            Box::new(Infix(Operation::Equal, Box::new(Number("1".to_string())), Box::new(Number("1".to_string())))),
             Box::new(Language::Block(vec![Number("1".to_string())])),
             None
         );

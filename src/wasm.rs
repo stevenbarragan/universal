@@ -30,9 +30,20 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
                 Operation::Minus => "sub",
                 Operation::Mult => "mul",
                 Operation::Div => "div",
-                Operation::Eq => "eq",
+                Operation::Exp => "div",
+                Operation::Assignment => "set",
+                Operation::Equal => "eq",
+                Operation::And => "and",
+                Operation::Or => "or",
+                Operation::XOr => "xor",
+                Operation::NotEq => "ne",
+                Operation::LessThan => "lt",
+                Operation::MoreThan => "gt",
+                Operation::LessThanOrEq => "le",
+                Operation::MoreThanOrEq => "ge",
+                Operation::Min => "min",
+                Operation::Max => "max",
                 Operation::Native(op) => op,
-                Operation::Assignment => "set"
             };
 
             format!("({}.{} {} {})", value_type_to_wasm(find_value_type(left)), method, to_wasm(left, data), to_wasm(right, data))
