@@ -43,6 +43,7 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
                 Operation::MoreThanOrEq => "ge",
                 Operation::Min => "min",
                 Operation::Max => "max",
+                Operation::Module => "rem_s",
                 Operation::Native(op) => op,
             };
 

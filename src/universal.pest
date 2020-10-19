@@ -1,6 +1,6 @@
 language = _{ NEWLINE* ~ (module | expression | function_def) }
 
-expression = { boolean ~ (boolean_operator ~ boolean)*  }
+expression = { assignation | (boolean ~ (boolean_operator ~ boolean)*)  }
 boolean_operator = { "==" | "!=" | "<" | ">" | "<=" | ">=" | "min" | "max" }
 boolean = { summand ~ (summand_operator ~ summand)* }
 summand_operator = { "+" | "-" }
@@ -8,7 +8,7 @@ summand = { unary ~ (factor_operator ~ unary)*  }
 factor_operator = { "*" | "/" }
 unary = { (unary_operator ~ primary) | primary }
 unary_operator = { "!" | "-" }
-primary = { "(" ~ expression ~ ")" | assignation | endvalues }
+primary = { "(" ~ expression ~ ")" | endvalues }
 endvalues  = _{ symbol | integer | conditional | function_call | variable }
 
 assignation = { (variable_def | variable) ~ "=" ~ expression }
