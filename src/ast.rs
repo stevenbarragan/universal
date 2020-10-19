@@ -24,6 +24,7 @@ pub enum Operation {
     Minus,
     Mult,
     Div,
+    Module,
     Exp,
     Assignment,
     Equal,
@@ -50,7 +51,7 @@ pub enum Language {
     Function(String, Params, Vec<ValueType>, Block),
     Infix(Operation, Box<Language>, Box<Language>),
     Module(String, Vec<Language>, Block),
-    Number(String),
+    Number(i64),
     Variable(String, ValueType),
     Symbol(String),
     Conditional(ConditionalType, Box<Language>, Box<Language>, Option<Box<Language>>)
@@ -98,7 +99,7 @@ use pest::iterators::{Pair,Pairs};
 fn build_ast(pair: Pair<Rule>, variables: &mut Variables) -> Result<Language, Error<Rule>> {
     match pair.as_rule() {
         Rule::integer => {
-            let value = pair.as_str().to_string();
+            let value = pair.as_str().parse().unwrap();
 
             Ok(Language::Number(value))
         },
@@ -385,11 +386,11 @@ mod test {
     fn constants() {
         let mut variables = HashMap::new();
 
-        assert_eq!(to_ast("42", &mut variables), Ok(Number("42".to_string())));
+        assert_eq!(to_ast("42", &mut variables), Ok(Number(42)));
 
         assert_eq!(to_ast("
                 42
-                ", &mut variables), Ok(Number("42".to_string())));
+                ", &mut variables), Ok(Number(42)));
     }
 
     #[test]
@@ -409,10 +410,10 @@ mod test {
         let expected = Infix(
             Operation::Minus,
             Box::new(Infix(Operation::Add,
-                Box::new(Number("1".to_string())),
-                Box::new(Number("2".to_string())),
+                Box::new(Number(1)),
+                Box::new(Number(2)),
             )),
-            Box::new(Number("3".to_string()))
+            Box::new(Number(3))
         );
 
         assert_eq!(to_ast(instruction, &mut variables), Ok(expected))
@@ -424,7 +425,7 @@ mod test {
 
         variables.insert("add".to_string(), ValueType::Integer);
 
-        assert_eq!(to_ast("add(1)", &mut variables), Ok(Call("add".to_string(), vec![Number("1".to_string())], ValueType::Integer)));
+        assert_eq!(to_ast("add(1)", &mut variables), Ok(Call("add".to_string(), vec![Number(1)], ValueType::Integer)));
     }
 
     #[test]
@@ -432,12 +433,12 @@ mod test {
         let mut variables = HashMap::new();
 
         assert_eq!(to_ast("5 + 2", &mut variables),
-            Ok(Infix( Operation::Add, Box::new(Number("5".to_string())), Box::new(Number("2".to_string())))));
+            Ok(Infix( Operation::Add, Box::new(Number(5)), Box::new(Number(2)))));
 
         variables.insert("x".to_string(), ValueType::Integer);
 
         assert_eq!(to_ast("x + 1", &mut variables),
-            Ok(Infix(Operation::Add, Box::new(Variable ("x".to_string(), ValueType::Integer)), Box::new(Number("1".to_string())))));
+            Ok(Infix(Operation::Add, Box::new(Variable ("x".to_string(), ValueType::Integer)), Box::new(Number(1)))));
     }
 
     #[test]
@@ -445,12 +446,12 @@ mod test {
         let mut variables = HashMap::new();
 
         assert_eq!(to_ast("x: Int = 1", &mut variables),
-            Ok(Infix(Operation::Assignment, Box::new(Variable ("x".to_string(), ValueType::Integer)), Box::new(Number("1".to_string())))));
+            Ok(Infix(Operation::Assignment, Box::new(Variable ("x".to_string(), ValueType::Integer)), Box::new(Number(1)))));
 
         variables.insert("x".to_string(), ValueType::Integer);
 
         assert_eq!(to_ast("x = 1", &mut variables),
-            Ok(Infix(Operation::Assignment, Box::new(Variable ("x".to_string(), ValueType::Integer)), Box::new(Number("1".to_string())))));
+            Ok(Infix(Operation::Assignment, Box::new(Variable ("x".to_string(), ValueType::Integer)), Box::new(Number(1)))));
     }
 
     #[test]
@@ -466,7 +467,7 @@ mod test {
             "hello".to_string(),
             vec![],
             vec![ValueType::Integer],
-            vec![Number("42".to_string())]
+            vec![Number(42)]
         );
 
         assert_eq!(result, Ok(expected));
@@ -482,7 +483,7 @@ mod test {
             "hello".to_string(),
             vec![("num".to_string(), ValueType::Integer)],
             vec![ValueType::Integer],
-            vec![Number("42".to_string())]
+            vec![Number(42)]
         );
 
         assert_eq!(result, Ok(expected));
@@ -514,7 +515,7 @@ mod test {
             "hello".to_string(),
             vec![("num".to_string(), ValueType::Integer)],
             vec![ValueType::Integer],
-            vec![Infix(Operation::Add, Box::new(Variable ("num".to_string(), ValueType::Integer)), Box::new(Number("2".to_string())))]
+            vec![Infix(Operation::Add, Box::new(Variable ("num".to_string(), ValueType::Integer)), Box::new(Number(2)))]
         );
 
         assert_eq!(result, Ok(expected));
@@ -555,11 +556,11 @@ mod test {
             end
             ";
 
-        let instructions = vec![Number("1".to_string())];
+        let instructions = vec![Number(1)];
 
         let expected = Conditional(
             ConditionalType::If,
-            Box::new(Number("1".to_string())),
+            Box::new(Number(1)),
             Box::new(Language::Block(instructions)),
             None
         );
@@ -577,11 +578,11 @@ mod test {
             end
             ";
 
-        let instructions = vec![Number("2".to_string())];
+        let instructions = vec![Number(2)];
 
         let expected = Conditional(
             ConditionalType::Unless,
-            Box::new(Number("1".to_string())),
+            Box::new(Number(1)),
             Box::new(Language::Block(instructions)),
             None
         );
@@ -601,12 +602,12 @@ mod test {
             end
         ";
 
-        let instructions = vec![Number("1".to_string())];
-        let instructions_2 = vec![Number("2".to_string())];
+        let instructions = vec![Number(1)];
+        let instructions_2 = vec![Number(2)];
 
         let expected = Conditional(
             ConditionalType::If,
-            Box::new(Number("1".to_string())),
+            Box::new(Number(1)),
             Box::new(Language::Block(instructions)),
             Some(Box::new(Language::Block(instructions_2)))
         );
@@ -626,8 +627,8 @@ mod test {
 
         let expected = Conditional(
             ConditionalType::If,
-            Box::new(Infix(Operation::Equal, Box::new(Number("1".to_string())), Box::new(Number("1".to_string())))),
-            Box::new(Language::Block(vec![Number("1".to_string())])),
+            Box::new(Infix(Operation::Equal, Box::new(Number(1)), Box::new(Number(1)))),
+            Box::new(Language::Block(vec![Number(1)])),
             None
         );
 

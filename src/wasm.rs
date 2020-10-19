@@ -186,7 +186,7 @@ mod test {
             "add2".to_string(),
             vec![("num".to_string(), ValueType::Integer)],
             vec![ValueType::Integer],
-            vec![Infix(Operation::Add, Box::new(Variable ("num".to_string(), ValueType::Integer)), Box::new(Number("2".to_string())))]
+            vec![Infix(Operation::Add, Box::new(Variable ("num".to_string(), ValueType::Integer)), Box::new(Number(2)))]
         );
 
         assert_eq!(to_wasm(&function, &mut data), "(func $add2 (param $num i32) (result i32) (i32.add (local.get $num) (i32.const 2)))");
@@ -223,7 +223,7 @@ mod test {
     #[test]
     fn assignation_to_wasm() {
         let mut data: Data = Default::default();
-        let assignation = Infix(Operation::Assignment, Box::new(Variable ("x".to_string(), ValueType::Integer)), Box::new(Number("1".to_string())));
+        let assignation = Infix(Operation::Assignment, Box::new(Variable ("x".to_string(), ValueType::Integer)), Box::new(Number(1)));
 
         assert_eq!(to_wasm(&assignation, &mut data), "(local.set $x (i32.const 1))")
     }
@@ -239,7 +239,7 @@ mod test {
         end
         ", &mut variables);
 
-        let expected  = Module("awesome".to_string(), vec![], vec![Number("42".to_string())]);
+        let expected  = Module("awesome".to_string(), vec![], vec![Number(42)]);
 
         let mut variables = HashMap::new();
 
@@ -254,7 +254,7 @@ mod test {
             "tres".to_string(),
             vec![],
             vec![ValueType::Integer],
-            vec![Language::Number("3".to_string())]
+            vec![Language::Number(3)]
         );
 
         let expected  = Language::Module("awesome".to_string(), vec![function], vec![]);
@@ -265,10 +265,10 @@ mod test {
             "tres".to_string(),
             vec![],
             vec![ValueType::Integer],
-            vec![Language::Number("3".to_string())]
+            vec![Language::Number(3)]
         );
 
-        let module = Language::Module("awesome".to_string(), vec![function], vec![Number("42".to_string())]);
+        let module = Language::Module("awesome".to_string(), vec![function], vec![Number(42)]);
 
         let expected = "(module $awesome (func $tres (result i32) (i32.const 3)) (func $main (result i32) (i32.const 42)) (export \"main\" (func $main)))";
 
@@ -296,11 +296,11 @@ mod test {
 
     #[test]
     fn conditional_if() {
-        let instructions = vec![Number("1".to_string())];
+        let instructions = vec![Number(1)];
 
         let conditional = Conditional(
             ConditionalType::If,
-            Box::new(Number("1".to_string())),
+            Box::new(Number(1)),
             Box::new(Language::Block(instructions)),
             None
         );
@@ -316,9 +316,9 @@ mod test {
     fn conditional_if_else() {
         let conditional = Conditional(
             ConditionalType::If,
-            Box::new(Number("1".to_string())),
-            Box::new(Language::Block(vec![Number("1".to_string())])),
-            Some(Box::new(Language::Block(vec![Number("2".to_string())]))),
+            Box::new(Number(1)),
+            Box::new(Language::Block(vec![Number(1)])),
+            Some(Box::new(Language::Block(vec![Number(2)]))),
         );
 
         let expected = "(if (result i32) (i32.const 1) (then (i32.const 1)) (else (i32.const 2)))";
@@ -330,11 +330,11 @@ mod test {
 
     #[test]
     fn conditional_unless() {
-        let instructions = vec![Number("1".to_string())];
+        let instructions = vec![Number(1)];
 
         let conditional = Conditional(
             ConditionalType::Unless,
-            Box::new(Number("1".to_string())),
+            Box::new(Number(1)),
             Box::new(Language::Block(instructions)),
             None
         );
