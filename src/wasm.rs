@@ -49,7 +49,7 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
 
             format!("({}.{} {} {})", value_type_to_wasm(find_value_type(left)), method, to_wasm(left, data), to_wasm(right, data))
         },
-        Language::Function(name, params, results, block) => {
+        Language::Function(name, params, results, block, _) => {
             let params_str = params.into_iter()
                 .map( |(name, value_type)| format!("(param ${} {})", name, value_type_to_wasm(value_type)) )
                 .collect::<Vec<String>>()
@@ -103,7 +103,9 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
                 .collect::<Vec<String>>()
                 .join(" ")
         },
-        Language::Module(name, functions, instructions) => {
+        Language::Module(name, functions, instructions, exports) => {
+            let mut exports = exports.clone();
+
             let functions_str = functions.into_iter()
                 .map( |language| to_wasm(language, data) )
                 .collect::<Vec<String>>()
@@ -121,8 +123,11 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
                     "main".to_string(),
                     vec![],
                     vec![value_type.clone()],
-                    instructions.clone()
+                    instructions.clone(),
+                    Visiblitity::Public
                 );
+
+                exports.push(Export::Function("main".to_string()));
 
                 to_wasm(&main, data)
             };
@@ -133,12 +138,11 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
                 "".to_string()
             };
 
-            let exports = ["main"];
-
-            let exports_str = exports.iter()
-                .map( |export| format!("(export \"{}\" (func ${}))", export, export) )
-                .collect::<Vec<String>>()
-                .join(" ");
+            let exports_str = exports.iter().map( |export|
+                match export {
+                    Export::Function(name) => format!("(export \"{}\" (func ${}))", name, name)
+                }
+            ).collect::<Vec<String>>().join(" ");
 
             let body = vec![data_str, functions_str, main, exports_str].into_iter()
                 .filter( |x| x != "" )
@@ -187,7 +191,8 @@ mod test {
             "add2".to_string(),
             vec![("num".to_string(), ValueType::Integer)],
             vec![ValueType::Integer],
-            vec![Infix(Operation::Add, Box::new(Variable ("num".to_string(), ValueType::Integer)), Box::new(Number(2)))]
+            vec![Infix(Operation::Add, Box::new(Variable ("num".to_string(), ValueType::Integer)), Box::new(Number(2)))],
+            Visiblitity::Private,
         );
 
         assert_eq!(to_wasm(&function, &mut data), "(func $add2 (param $num i32) (result i32) (i32.add (local.get $num) (i32.const 2)))");
@@ -233,6 +238,7 @@ mod test {
     fn modules() {
         let mut variables = HashMap::new();
         let mut data: Data = Default::default();
+        let exports = vec![];
 
         let module = to_ast(
         "module awesome
@@ -240,7 +246,9 @@ mod test {
         end
         ", &mut variables);
 
-        let expected  = Module("awesome".to_string(), vec![], vec![Number(42)]);
+        let expected  = Module("awesome".to_string(), vec![], vec![Number(42)], exports);
+
+        assert_eq!(module, Ok(expected));
 
         let mut variables = HashMap::new();
 
@@ -255,10 +263,12 @@ mod test {
             "tres".to_string(),
             vec![],
             vec![ValueType::Integer],
-            vec![Language::Number(3)]
+            vec![Language::Number(3)],
+            Visiblitity::Private,
         );
 
-        let expected  = Language::Module("awesome".to_string(), vec![function], vec![]);
+        let exports = vec![];
+        let expected  = Language::Module("awesome".to_string(), vec![function], vec![], exports);
 
         assert_eq!(module, Ok(expected));
         
@@ -266,12 +276,16 @@ mod test {
             "tres".to_string(),
             vec![],
             vec![ValueType::Integer],
-            vec![Language::Number(3)]
+            vec![Language::Number(3)],
+            Visiblitity::Public,
         );
 
-        let module = Language::Module("awesome".to_string(), vec![function], vec![Number(42)]);
+        let mut exports = vec![];
+        exports.push(Export::Function("tres".to_string()));
 
-        let expected = "(module $awesome (func $tres (result i32) (i32.const 3)) (func $main (result i32) (i32.const 42)) (export \"main\" (func $main)))";
+        let module = Language::Module("awesome".to_string(), vec![function], vec![Number(42)], exports);
+
+        let expected = "(module $awesome (func $tres (result i32) (i32.const 3)) (func $main (result i32) (i32.const 42)) (export \"tres\" (func $tres)) (export \"main\" (func $main)))";
 
         assert_eq!(to_wasm(&module, &mut data), expected);
     }
@@ -279,16 +293,18 @@ mod test {
     #[test]
     fn symbols() {
         let mut data: Data = Default::default();
+        let mut exports = vec![];
 
-        let module = Language::Module("awesome".to_string(), vec![], vec![Symbol("42".to_string())]);
+        let module = Language::Module("awesome".to_string(), vec![], vec![Symbol("42".to_string())], exports);
 
         let expected = "(module $awesome (memory (export \"mem\") 1) (data (i32.const 0) \"42\") (func $main (result i32 i32) (i32.const 0) (i32.const 2)) (export \"main\" (func $main)))";
 
         assert_eq!(to_wasm(&module, &mut data), expected);
 
         let mut data: Data = Default::default();
+        let mut exports = vec![];
 
-        let module = Language::Module("awesome".to_string(), vec![], vec![Symbol("42".to_string()), Symbol("43".to_string())]);
+        let module = Language::Module("awesome".to_string(), vec![], vec![Symbol("42".to_string()), Symbol("43".to_string())], exports);
 
         let expected = "(module $awesome (memory (export \"mem\") 1) (data (i32.const 0) \"4243\") (func $main (result i32 i32) (i32.const 0) (i32.const 2) (i32.const 2) (i32.const 2)) (export \"main\" (func $main)))";
 

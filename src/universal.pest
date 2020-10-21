@@ -25,7 +25,8 @@ integer = @{ NUMBER+ }
 function_call = { name ~ "(" ~ function_params ~ ")" }
 function_params = { expression ~ ("," ~ expression)* }
 
-function_def = { "fn" ~ name ~ ("(" ~ params? ~ ")")? ~ ":" ~ results ~ block ~ "end" }
+function_def = { public? ~ "fn" ~ name ~ ("(" ~ params? ~ ")")? ~ ":" ~ results ~ block ~ "end" }
+public = { "export" }
 
 block = { (NEWLINE* ~ expression)+ ~ NEWLINE* }
 
@@ -43,7 +44,7 @@ symbol = { ":" ~ (symbol_value | "\"" ~ string_value ~ "\"") }
 symbol_value = @{ (LETTER | NUMBER)+ }
 string_value = { (LETTER | NUMBER)* }
 
-reserve_word = _{ "end" | "fn" | "module" | "if" | "else" | "unless" }
+reserve_word = _{ "end" | "fn" | "module" | "if" | "else" | "unless" | "export" }
 
 WHITESPACE = _{ " " | "\t" | "\r" }
 NEWLINE = _{ "\n" | ";" }

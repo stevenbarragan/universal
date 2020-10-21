@@ -45,12 +45,20 @@ pub enum Operation {
 pub enum ConditionalType {If, Unless}
 
 #[derive(Debug, PartialEq, Clone, Hash, Eq)]
+pub enum Export {
+    Function(String)
+}
+
+#[derive(Debug, PartialEq, Clone, Hash, Eq, Copy)]
+pub enum Visiblitity { Public, Private }
+
+#[derive(Debug, PartialEq, Clone, Hash, Eq)]
 pub enum Language {
     Block(Block),
     Call(String, Block, ValueType),
-    Function(String, Params, Vec<ValueType>, Block),
+    Function(String, Params, Vec<ValueType>, Block, Visiblitity),
     Infix(Operation, Box<Language>, Box<Language>),
-    Module(String, Vec<Language>, Block),
+    Module(String, Vec<Language>, Block, Vec<Export>),
     Number(i64),
     Variable(String, ValueType),
     Symbol(String),
@@ -64,7 +72,7 @@ pub fn find_value_type(node: &Language) -> &ValueType {
         Language::Infix(_, _, right) => {
             find_value_type(right)
         },
-        Language::Function(_, _, results, _) => {
+        Language::Function(_, _, results, _, _) => {
             &results[0]
         }
         Language::Call(_, _, value_type) => value_type,
@@ -75,7 +83,7 @@ pub fn find_value_type(node: &Language) -> &ValueType {
                 panic!("No instructions")
             }
         }
-        Language::Module(_, _, instructions) => {
+        Language::Module(_, _, instructions, _) => {
             if let Some(instruction) = instructions.last() {
                 find_value_type(instruction) 
             } else {
@@ -149,8 +157,15 @@ fn build_ast(pair: Pair<Rule>, variables: &mut Variables) -> Result<Language, Er
             let mut results = vec![];
             let mut params = vec![];
             let mut instructions = vec![];
+            let mut visibility = Visiblitity::Private;
 
             let mut elem = inner.next().unwrap();
+
+            if elem.as_rule() == Rule::public {
+                visibility = Visiblitity::Public;
+
+                elem = inner.next().unwrap();
+            }
 
             if elem.as_rule() == Rule::params {
                 let mut params_inner = elem.into_inner();
@@ -193,7 +208,7 @@ fn build_ast(pair: Pair<Rule>, variables: &mut Variables) -> Result<Language, Er
                 }
             }
 
-            Ok(Language::Function(name, params, results, instructions))
+            Ok(Language::Function(name, params, results, instructions, visibility.clone()))
         },
         Rule::block => {
             let mut instructions = vec![];
@@ -227,6 +242,7 @@ fn build_ast(pair: Pair<Rule>, variables: &mut Variables) -> Result<Language, Er
         Rule::module => {
             let mut instructions = vec![];
             let mut functions = vec![];
+            let mut exports = vec![];
 
             let mut inner = pair.into_inner();
 
@@ -239,13 +255,20 @@ fn build_ast(pair: Pair<Rule>, variables: &mut Variables) -> Result<Language, Er
             while let Some(instruction) = pair.next() {
                 let ast = build_ast(instruction, variables)?;
 
-                match ast {
-                    Language::Function(_, _, _, _) => functions.push(ast),
+                match &ast {
+                    Language::Function(name, _, _, _, visibility) => {
+                        match visibility {
+                            Visiblitity::Public => exports.push(Export::Function(name.clone())),
+                            Visiblitity::Private => ()
+                        }
+
+                        functions.push(ast);
+                    },
                     _ => instructions.push(ast)
                 }
             }
 
-            Ok(Language::Module(name, functions, instructions))
+            Ok(Language::Module(name, functions, instructions, exports))
         },
         Rule::symbol => {
             let mut inner = pair.into_inner();
@@ -467,7 +490,8 @@ mod test {
             "hello".to_string(),
             vec![],
             vec![ValueType::Integer],
-            vec![Number(42)]
+            vec![Number(42)],
+            Visiblitity::Private
         );
 
         assert_eq!(result, Ok(expected));
@@ -483,7 +507,8 @@ mod test {
             "hello".to_string(),
             vec![("num".to_string(), ValueType::Integer)],
             vec![ValueType::Integer],
-            vec![Number(42)]
+            vec![Number(42)],
+            Visiblitity::Private
         );
 
         assert_eq!(result, Ok(expected));
@@ -499,7 +524,8 @@ mod test {
             "hello".to_string(),
             vec![("num".to_string(), ValueType::Integer)],
             vec![ValueType::Integer],
-            vec![Variable("num".to_string(), ValueType::Integer)]
+            vec![Variable("num".to_string(), ValueType::Integer)],
+            Visiblitity::Private
         );
 
         assert_eq!(result, Ok(expected));
@@ -515,7 +541,8 @@ mod test {
             "hello".to_string(),
             vec![("num".to_string(), ValueType::Integer)],
             vec![ValueType::Integer],
-            vec![Infix(Operation::Add, Box::new(Variable ("num".to_string(), ValueType::Integer)), Box::new(Number(2)))]
+            vec![Infix(Operation::Add, Box::new(Variable ("num".to_string(), ValueType::Integer)), Box::new(Number(2)))],
+            Visiblitity::Private
         );
 
         assert_eq!(result, Ok(expected));
@@ -531,7 +558,8 @@ mod test {
             "add".to_string(),
             vec![("num".to_string(), ValueType::Integer), ("num2".to_string(), ValueType::Integer)],
             vec![ValueType::Integer],
-            vec![Infix(Operation::Add, Box::new(Variable ("num".to_string(), ValueType::Integer)), Box::new(Variable ("num2".to_string(), ValueType::Integer)))]
+            vec![Infix(Operation::Add, Box::new(Variable ("num".to_string(), ValueType::Integer)), Box::new(Variable ("num2".to_string(), ValueType::Integer)))],
+            Visiblitity::Private
         );
 
         assert_eq!(result, Ok(expected));
