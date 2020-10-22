@@ -9,7 +9,11 @@ factor_operator = { "*" | "/" }
 unary = { (unary_operator ~ primary) | primary }
 unary_operator = { "!" | "-" }
 primary = { "(" ~ expression ~ ")" | endvalues }
-endvalues  = _{ symbol | integer | conditional | function_call | variable }
+endvalues  = _{ symbol | integer | conditional | function_call | bool | variable }
+
+bool = { thruty | falsey }
+thruty = { "true" }
+falsey = { "false" }
 
 assignation = { (variable_def | variable) ~ "=" ~ expression }
 

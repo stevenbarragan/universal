@@ -10,6 +10,11 @@ pub struct Data {
 
 pub fn to_wasm(node: &Language, data: &mut Data) -> String {
     match node {
+        Language::Boolean(thruty) => {
+            let value = if *thruty { 1 } else { 0 };
+
+            format!("(i32.const {})", value)
+        },
         Language::Variable(name, _) => {
             format!("(local.get ${})", name)
         },
@@ -174,6 +179,7 @@ fn value_type_to_wasm(value_type: &ValueType) -> String {
         ValueType::Integer => "i32".to_string(),
         ValueType::Float => "f32".to_string(),
         ValueType::Symbol => "i32 i32".to_string(),
+        ValueType::Bool => "i32".to_string(),
         ValueType::Native(name) => name.to_string(),
     }
 }
@@ -361,5 +367,22 @@ mod test {
         let mut data: Data = Default::default();
 
         assert_eq!(to_wasm(&conditional, &mut data), expected);
+    }
+
+    #[test]
+    fn booleans() {
+        let mut data: Data = Default::default();
+
+        let instruction = Boolean(true);
+
+        let expected = "(i32.const 1)";
+
+        assert_eq!(to_wasm(&instruction, &mut data), expected);
+
+        let instruction = Boolean(false);
+
+        let expected = "(i32.const 0)";
+
+        assert_eq!(to_wasm(&instruction, &mut data), expected);
     }
 }

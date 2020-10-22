@@ -11,6 +11,7 @@ pub enum ValueType {
     Integer,
     Float,
     Symbol,
+    Bool,
     Native(String)
 }
 
@@ -62,7 +63,8 @@ pub enum Language {
     Number(i64),
     Variable(String, ValueType),
     Symbol(String),
-    Conditional(ConditionalType, Box<Language>, Box<Language>, Option<Box<Language>>)
+    Conditional(ConditionalType, Box<Language>, Box<Language>, Option<Box<Language>>),
+    Boolean(bool),
 }
 
 pub fn find_value_type(node: &Language) -> &ValueType {
@@ -97,7 +99,8 @@ pub fn find_value_type(node: &Language) -> &ValueType {
             } else {
                 panic!("No instructions")
             }
-        }
+        },
+        Language::Boolean(_) => &ValueType::Bool,
     }
 }
 
@@ -106,6 +109,15 @@ use pest::iterators::{Pair,Pairs};
 
 fn build_ast(pair: Pair<Rule>, variables: &mut Variables) -> Result<Language, Error<Rule>> {
     match pair.as_rule() {
+        Rule::bool => {
+            let value = pair.as_str();
+
+            if value == "true" {
+                Ok(Language::Boolean(true))
+            } else {
+                Ok(Language::Boolean(false))
+            }
+        },
         Rule::integer => {
             let value = pair.as_str().parse().unwrap();
 
@@ -663,5 +675,15 @@ mod test {
         );
 
         assert_eq!(to_ast(program, &mut variables), Ok(expected));
+    }
+
+    #[test]
+    fn booleans() {
+        let mut variables = HashMap::new();
+
+        let program = "true";
+        let expected = Boolean(true);
+
+        assert_eq!(to_ast(program, &mut variables), Ok(expected))
     }
 }
