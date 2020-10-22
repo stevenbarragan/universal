@@ -22,7 +22,7 @@ module_block = { (NEWLINE* ~ (expression | function_def))+ ~ NEWLINE* }
 
 integer = @{ NUMBER+ }
 
-function_call = { name ~ "(" ~ function_params ~ ")" }
+function_call = { name ~ "(" ~ function_params? ~ ")" }
 function_params = { expression ~ ("," ~ expression)* }
 
 function_def = { public? ~ "fn" ~ name ~ ("(" ~ params? ~ ")")? ~ ":" ~ results ~ block ~ "end" }

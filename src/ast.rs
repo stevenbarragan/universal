@@ -227,10 +227,12 @@ fn build_ast(pair: Pair<Rule>, variables: &mut Variables) -> Result<Language, Er
 
             let mut params = vec![];
 
-            let mut params_inner = inner.next().unwrap().into_inner();
+            if let Some(pair_params) = inner.next() {
+                let mut params_inner = pair_params.into_inner();
 
-            while let Some(param) = params_inner.next() {
-                params.push(build_ast(param, variables)?);
+                while let Some(param) = params_inner.next() {
+                    params.push(build_ast(param, variables)?);
+                }
             }
 
             if let Some(value_type) = variables.get(&name) {
@@ -448,6 +450,7 @@ mod test {
 
         variables.insert("add".to_string(), ValueType::Integer);
 
+        assert_eq!(to_ast("add()", &mut variables), Ok(Call("add".to_string(), vec![], ValueType::Integer)));
         assert_eq!(to_ast("add(1)", &mut variables), Ok(Call("add".to_string(), vec![Number(1)], ValueType::Integer)));
     }
 
@@ -564,7 +567,6 @@ mod test {
 
         assert_eq!(result, Ok(expected));
     }
-
 
     #[test]
     fn strings() {
