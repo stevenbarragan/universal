@@ -22,24 +22,24 @@ pub type Block = Vec<Language>;
 #[derive(Debug, PartialEq, Clone, Hash, Eq)]
 pub enum Operation {
     Add,
-    Minus,
-    Mult,
-    Div,
-    Module,
-    Exp,
-    Assignment,
-    Equal,
     And,
+    Assignment,
+    Div,
+    Equal,
+    Exp,
+    LessThan,
+    LessThanOrEq,
+    Max,
+    Min,
+    Minus,
+    Module,
+    MoreThan,
+    MoreThanOrEq,
+    Mult,
+    Native(String),
+    NotEq,
     Or,
     XOr,
-    NotEq,
-    LessThan,
-    MoreThan,
-    LessThanOrEq,
-    MoreThanOrEq,
-    Min,
-    Max,
-    Native(String)
 }
 
 #[derive(Debug, PartialEq, Clone, Hash, Eq)]
@@ -50,27 +50,32 @@ pub enum Export {
     Function(String)
 }
 
+pub type Import = String;
+
 #[derive(Debug, PartialEq, Clone, Hash, Eq, Copy)]
 pub enum Visiblitity { Public, Private }
 
 #[derive(Debug, PartialEq, Clone, Hash, Eq)]
 pub enum Language {
     Block(Block),
-    Call(String, Block, ValueType),
-    Function(String, Params, Vec<ValueType>, Block, Visiblitity),
-    Infix(Operation, Box<Language>, Box<Language>),
-    Module(String, Vec<Language>, Block, Vec<Export>),
-    Number(i64),
-    Variable(String, ValueType),
-    Symbol(String),
-    Conditional(ConditionalType, Box<Language>, Box<Language>, Option<Box<Language>>),
     Boolean(bool),
+    Call(String, Block, ValueType),
+    Conditional(ConditionalType, Box<Language>, Box<Language>, Option<Box<Language>>),
+    Float(String),
+    Function(String, Params, Vec<ValueType>, Block, Visiblitity),
+    Import(String),
+    Infix(Operation, Box<Language>, Box<Language>),
+    Module(String, Vec<Language>, Block, Vec<Export>, Vec<Import>),
+    Number(i64),
+    Symbol(String),
+    Variable(String, ValueType),
 }
 
 pub fn find_value_type(node: &Language) -> &ValueType {
     match node {
         Language::Variable(_, value_type) => value_type,
         Language::Number(_) => &ValueType::Integer,
+        Language::Float(_) => &ValueType::Float,
         Language::Infix(_, _, right) => {
             find_value_type(right)
         },
@@ -101,6 +106,7 @@ pub fn find_value_type(node: &Language) -> &ValueType {
             }
         },
         Language::Boolean(_) => &ValueType::Bool,
+        Language::Import(_) => panic!("No value on import")
     }
 }
 
@@ -117,6 +123,18 @@ fn build_ast(pair: Pair<Rule>, variables: &mut Variables) -> Result<Language, Er
             } else {
                 Ok(Language::Boolean(false))
             }
+        },
+        Rule::import => {
+            let mut inner = pair.into_inner();
+
+            let path = inner.next().unwrap().as_str();
+
+            Ok(Language::Import(path.to_string()))
+        },
+        Rule::float => {
+            let value = pair.as_str();
+
+            Ok(Language::Float(value.to_owned()))
         },
         Rule::integer => {
             let value = pair.as_str().parse().unwrap();
@@ -257,6 +275,7 @@ fn build_ast(pair: Pair<Rule>, variables: &mut Variables) -> Result<Language, Er
             let mut instructions = vec![];
             let mut functions = vec![];
             let mut exports = vec![];
+            let mut imports = vec![];
 
             let mut inner = pair.into_inner();
 
@@ -683,6 +702,16 @@ mod test {
 
         let program = "true";
         let expected = Boolean(true);
+
+        assert_eq!(to_ast(program, &mut variables), Ok(expected))
+    }
+
+    #[test]
+    fn floats() {
+        let mut variables = HashMap::new();
+
+        let program = "2.23";
+        let expected = Float("2.23".to_owned());
 
         assert_eq!(to_ast(program, &mut variables), Ok(expected))
     }

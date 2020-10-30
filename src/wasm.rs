@@ -21,6 +21,9 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
         Language::Number(number) => {
             format!("(i32.const {})", number)
         },
+        Language::Float(float) => {
+            format!("(f32.const {})", float)
+        },
         Language::Infix(operation, left, right) => {
             if &Operation::Assignment == operation {
                 if let Language::Variable(name, value_type) = left.as_ref() {
@@ -384,5 +387,17 @@ mod test {
         let expected = "(i32.const 0)";
 
         assert_eq!(to_wasm(&instruction, &mut data), expected);
+    }
+
+    #[test]
+    fn float() {
+        let mut data: Data = Default::default();
+
+        let instruction = Float("2.23".to_string());
+
+        let expected = "(f32.const 2.23)";
+
+        assert_eq!(to_wasm(&instruction, &mut data), expected);
+
     }
 }
