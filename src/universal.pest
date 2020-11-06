@@ -1,6 +1,6 @@
 language = _{ NEWLINE* ~ (module | expression | function_def) }
 
-expression = { assignation | (boolean ~ (boolean_operator ~ boolean)*)  }
+expression = { assignation | import | (boolean ~ (boolean_operator ~ boolean)*) }
 boolean_operator = { "==" | "!=" | "<" | ">" | "<=" | ">=" | "min" | "max" }
 boolean = { summand ~ (summand_operator ~ summand)* }
 summand_operator = { "+" | "-" }
@@ -19,6 +19,9 @@ falsey = { "false" }
 
 assignation = { (variable_def | variable) ~ "=" ~ expression }
 
+import = { "import" ~ filepath }
+filepath = @{ LETTER+ }
+
 conditional = { conditional_type ~ expression ~ block ~ else_block? ~ "end" }
 conditional_type = { "if" | "unless" }
 else_block = _{ "else" ~ block }
@@ -28,8 +31,9 @@ module_block = { (NEWLINE* ~ (expression | function_def))+ ~ NEWLINE* }
 
 integer = @{ NUMBER+ }
 
-function_call = { name ~ "(" ~ function_params? ~ ")" }
+function_call = { function_name ~ "(" ~ function_params? ~ ")" }
 function_params = { expression ~ ("," ~ expression)* }
+function_name = { name ~ ("::" ~ name)? }
 
 function_def = { public? ~ "fn" ~ name ~ ("(" ~ params? ~ ")")? ~ ":" ~ results ~ block ~ "end" }
 public = { "export" }

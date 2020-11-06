@@ -55,7 +55,7 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
                 Operation::Native(op) => op,
             };
 
-            format!("({}.{} {} {})", value_type_to_wasm(find_value_type(left)), method, to_wasm(left, data), to_wasm(right, data))
+            format!("({}.{} {} {})", value_types_to_wasm(&find_value_type(left)), method, to_wasm(left, data), to_wasm(right, data))
         },
         Language::Function(name, params, results, block, _) => {
             let params_str = params.into_iter()
@@ -73,7 +73,7 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
                 .join(" ");
 
             let locals = data.variables.iter()
-                .map( |(name, value_type)| format!("(local ${} {})", name, value_type_to_wasm(&value_type)) )
+                .map( |(name, value_type)| format!("(local ${} {})", name, value_types_to_wasm(&value_type)) )
                 .collect::<Vec<String>>()
                 .join(" ");
 
@@ -111,7 +111,7 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
                 .collect::<Vec<String>>()
                 .join(" ")
         },
-        Language::Module(name, functions, instructions, exports) => {
+        Language::Module(name, functions, instructions, exports, _imports) => {
             let mut exports = exports.clone();
 
             let functions_str = functions.into_iter()
@@ -122,7 +122,7 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
             let main = if instructions.is_empty() {
                 "".to_string()
             } else {
-                let value_type = match instructions.last() {
+                let value_types = match instructions.last() {
                     Some(instruction) => find_value_type(instruction),
                     None => panic!("No instructions")
                 };
@@ -130,12 +130,12 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
                 let main = Language::Function(
                     "main".to_string(),
                     vec![],
-                    vec![value_type.clone()],
+                    value_types.clone(),
                     instructions.clone(),
                     Visiblitity::Public
                 );
 
-                exports.push(Export::Function("main".to_string()));
+                exports.push(Export::Function("main".to_string(), value_types.clone()));
 
                 to_wasm(&main, data)
             };
@@ -148,7 +148,7 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
 
             let exports_str = exports.iter().map( |export|
                 match export {
-                    Export::Function(name) => format!("(export \"{}\" (func ${}))", name, name)
+                    Export::Function(name, _) => format!("(export \"{}\" (func ${}))", name, name)
                 }
             ).collect::<Vec<String>>().join(" ");
 
@@ -165,16 +165,24 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
 
             match conditional_type {
                 ConditionalType::If => match block2 {
-                    Some(x) => format!("(if (result {}) {} (then {}) (else {}))", value_type_to_wasm(find_value_type(block)), conditional_str, block_str, to_wasm(x, data)),
+                    Some(x) => format!("(if (result {}) {} (then {}) (else {}))", value_types_to_wasm(&find_value_type(block)), conditional_str, block_str, to_wasm(x, data)),
                     None => format!("(if {} (then {}))", conditional_str, block_str)
                 }
                 ConditionalType::Unless => match block2 {
-                    Some(x) => format!("(if (result {}) (i32.eqz {}) (then {}) (else {}))", value_type_to_wasm(find_value_type(block)), conditional_str, block_str, to_wasm(x, data)),
+                    Some(x) => format!("(if (result {}) (i32.eqz {}) (then {}) (else {}))", value_types_to_wasm(&find_value_type(block)), conditional_str, block_str, to_wasm(x, data)),
                     None => format!("(if (i32.eqz {}) (then {}))", conditional_str, block_str)
                 }
             }
-        }
+        },
+        Language::Program(_) => "".to_string()
     }
+}
+
+fn value_types_to_wasm(value_types: &Vec<ValueType>) -> String {
+    value_types.iter()
+        .map(|value_type: &ValueType| value_type_to_wasm(value_type))
+        .collect::<Vec<String>>()
+        .join(", ")
 }
 
 fn value_type_to_wasm(value_type: &ValueType) -> String {
@@ -200,7 +208,7 @@ mod test {
             "add2".to_string(),
             vec![("num".to_string(), ValueType::Integer)],
             vec![ValueType::Integer],
-            vec![Infix(Operation::Add, Box::new(Variable ("num".to_string(), ValueType::Integer)), Box::new(Number(2)))],
+            vec![Infix(Operation::Add, Box::new(Variable ("num".to_string(), vec![ValueType::Integer])), Box::new(Number(2)))],
             Visiblitity::Private,
         );
 
@@ -238,49 +246,15 @@ mod test {
     #[test]
     fn assignation_to_wasm() {
         let mut data: Data = Default::default();
-        let assignation = Infix(Operation::Assignment, Box::new(Variable ("x".to_string(), ValueType::Integer)), Box::new(Number(1)));
+        let assignation = Infix(Operation::Assignment, Box::new(Variable ("x".to_string(), vec![ValueType::Integer])), Box::new(Number(1)));
 
         assert_eq!(to_wasm(&assignation, &mut data), "(local.set $x (i32.const 1))")
     }
 
     #[test]
     fn modules() {
-        let mut variables = HashMap::new();
         let mut data: Data = Default::default();
-        let exports = vec![];
 
-        let module = to_ast(
-        "module awesome
-            42
-        end
-        ", &mut variables);
-
-        let expected  = Module("awesome".to_string(), vec![], vec![Number(42)], exports);
-
-        assert_eq!(module, Ok(expected));
-
-        let mut variables = HashMap::new();
-
-        let module = to_ast(
-        "module awesome
-            fn tres(): Int
-                3
-            end
-        end", &mut variables);
-
-        let function = Function(
-            "tres".to_string(),
-            vec![],
-            vec![ValueType::Integer],
-            vec![Language::Number(3)],
-            Visiblitity::Private,
-        );
-
-        let exports = vec![];
-        let expected  = Language::Module("awesome".to_string(), vec![function], vec![], exports);
-
-        assert_eq!(module, Ok(expected));
-        
         let function = Function(
             "tres".to_string(),
             vec![],
@@ -290,9 +264,11 @@ mod test {
         );
 
         let mut exports = vec![];
-        exports.push(Export::Function("tres".to_string()));
+        let imports = vec![];
 
-        let module = Language::Module("awesome".to_string(), vec![function], vec![Number(42)], exports);
+        exports.push(Export::Function("tres".to_string(), vec![ValueType::Integer]));
+
+        let module = Language::Module("awesome".to_string(), vec![function], vec![Number(42)], exports, imports);
 
         let expected = "(module $awesome (func $tres (result i32) (i32.const 3)) (func $main (result i32) (i32.const 42)) (export \"tres\" (func $tres)) (export \"main\" (func $main)))";
 
@@ -302,18 +278,20 @@ mod test {
     #[test]
     fn symbols() {
         let mut data: Data = Default::default();
-        let mut exports = vec![];
+        let exports = vec![];
+        let imports = vec![];
 
-        let module = Language::Module("awesome".to_string(), vec![], vec![Symbol("42".to_string())], exports);
+        let module = Language::Module("awesome".to_string(), vec![], vec![Symbol("42".to_string())], exports, imports);
 
         let expected = "(module $awesome (memory (export \"mem\") 1) (data (i32.const 0) \"42\") (func $main (result i32 i32) (i32.const 0) (i32.const 2)) (export \"main\" (func $main)))";
 
         assert_eq!(to_wasm(&module, &mut data), expected);
 
         let mut data: Data = Default::default();
-        let mut exports = vec![];
+        let exports = vec![];
+        let imports = vec![];
 
-        let module = Language::Module("awesome".to_string(), vec![], vec![Symbol("42".to_string()), Symbol("43".to_string())], exports);
+        let module = Language::Module("awesome".to_string(), vec![], vec![Symbol("42".to_string()), Symbol("43".to_string())], exports, imports);
 
         let expected = "(module $awesome (memory (export \"mem\") 1) (data (i32.const 0) \"4243\") (func $main (result i32 i32) (i32.const 0) (i32.const 2) (i32.const 2) (i32.const 2)) (export \"main\" (func $main)))";
 
