@@ -4,6 +4,7 @@ pub mod wasm;
 
 use std::fs;
 use std::str;
+use std::path::Path;
 use wat;
 
 use anyhow::Result;
@@ -18,10 +19,10 @@ extern crate pest_derive;
 
 use ast::*;
 
-pub fn execute_file(filename: &str) -> anyhow::Result<()> {
-    let file = fs::read_to_string(filename).expect("Something went wrong reading the file");
+pub fn execute_file(filepath: &str) -> anyhow::Result<()> {
+    let file = load_file(filepath);
 
-    execute(&format!("module awesome\n{} end", file))
+    execute(&file)
 }
 
 pub fn execute(string: &str) -> anyhow::Result<()> {

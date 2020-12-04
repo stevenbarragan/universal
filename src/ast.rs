@@ -1,6 +1,7 @@
-use std::collections::HashMap;
 use pest::Parser;
+use std::collections::HashMap;
 use std::fs;
+use std::path::Path;
 
 #[derive(Parser)]
 #[grammar = "universal.pest"]
@@ -411,10 +412,9 @@ pub fn to_ast(original: &str, variables: &mut Variables) -> Result<Language, Err
 }
 
 pub fn to_ast_from_file(filepath: &str) -> Result<Language, Error<Rule>> {
-    let file = fs::read_to_string(format!("{}.star", filepath)).expect("Something went wrong reading the file");
-
     let mut variables = Variables::new();
-    to_ast(&file, &mut variables)
+
+    to_ast(&load_file(&filepath), &mut variables)
 }
 
 fn parse_expression(inner: &mut Pairs<Rule>, variables: &mut Variables, modules: &mut Modules) -> Result<Language, Error<Rule>> {
@@ -470,6 +470,14 @@ fn str_operator_to_enum(operator: &str) -> Operation {
         "max" => Operation::Max,
         op => Operation::Native(op.to_string())
     }
+}
+
+pub fn load_file(filepath: &str) -> String {
+    let file = fs::read_to_string(format!("{}.star", filepath)).expect("Something went wrong reading the file");
+
+    let filename = Path::new(filepath).file_stem().unwrap().to_str().unwrap();
+
+    format!("module {}\n{} end", filename, file)
 }
 
 #[cfg(test)]
