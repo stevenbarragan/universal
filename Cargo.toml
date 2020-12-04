@@ -12,6 +12,6 @@ pest = "2.1"
 pest_derive = "2.1"
 rustyline = "6.3.0"
 rustyline-derive = "0.2.0"
-wasmer = { git = "https://github.com/wasmerio/wasmer", features = ["cranelift"] }
-wasmer-compiler-cranelift = { git = "https://github.com/wasmerio/wasmer"  }
-wasmer-engine-jit = { git = "https://github.com/wasmerio/wasmer"  }
+wasmtime = "0.21.0"
+wasmtime-wasi = "0.21.0"
+wat = "1.0.27"

@@ -2,17 +2,21 @@ pub mod compiler;
 pub mod ast;
 pub mod wasm;
 
-use wasmer::{Store, Module, Instance, Value, imports, Function, WasmPtr, Array};
-use wasmer_compiler_cranelift::Cranelift;
-use wasmer_engine_jit::JIT;
 use std::fs;
 use std::str;
+use wat;
+
+use anyhow::Result;
+use wasmtime::*;
+use wasmtime_wasi::{Wasi, WasiCtx};
 
 use compiler::compile;
 
 extern crate pest;
 #[macro_use]
 extern crate pest_derive;
+
+use ast::*;
 
 pub fn execute_file(filename: &str) -> anyhow::Result<()> {
     let file = fs::read_to_string(filename).expect("Something went wrong reading the file");
@@ -21,26 +25,51 @@ pub fn execute_file(filename: &str) -> anyhow::Result<()> {
 }
 
 pub fn execute(string: &str) -> anyhow::Result<()> {
-    let wasm = compile(string)?;
+    let mut variables = ast::Variables::new();
+    let mut data: wasm::Data = Default::default();
+    let ast = to_ast(string, &mut variables)?;
 
-    println!("{:?}", wasm);
+    match ast {
+        Language::Program(modules) => {
+	    let engine = Engine::default();
+	    let store = Store::new(&engine);
 
-    let compiler = Cranelift::default();
-    let store = Store::new(&JIT::new(&compiler).engine());
+	    let mut linker = Linker::new(&store);
+	    let wasi = Wasi::new(&store, WasiCtx::new(std::env::args())?);
+	    wasi.add_to_linker(&mut linker)?;
 
-    let module = Module::new(&store, &wasm)?;
-    let import_object = imports! {};
-    let instance = Instance::new(&module, &import_object)?;
+            let mut instances = vec![];
 
-    let main = instance.exports.get_function("main")?;
-    let result = main.call(&[])?;
+            for module in modules {
+                let binary = wat::parse_str(wasm::to_wasm(&module, &mut data))?;
 
-    println!("{:?}", result);
+                match module {
+                    Language::Module(name, _functions, _instructions, _exports, _imports) => {
+                        let wasm_module = Module::from_binary(&engine, binary.as_ref())?;
 
-    // let memory = instance.exports.get_memory("mem")?;
-    // unsafe {
-    //     println!("{:?}", str::from_utf8(&memory.data_unchecked()[0..2]));
-    // }
+                        let instance = linker.instantiate(&wasm_module)?;
+                    
+                        linker.instance(&name, &instance)?;
 
-    Ok(())
+                        instances.push(instance);
+                    },
+                    instruction => ()
+                }
+            }
+
+            if let Some(program) = instances.last() {
+                let main = program
+                    .get_func("main")
+                    .ok_or(anyhow::format_err!("failed to find `run` function export"))?
+                    .get0::<i32>()?;
+
+                let result = main()?;
+
+                println!("result: {:?}", result);
+            }
+
+            Ok(())
+        },
+        other => Ok(())
+    }
 }

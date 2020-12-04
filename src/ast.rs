@@ -49,7 +49,7 @@ pub enum ConditionalType {If, Unless}
 
 #[derive(Debug, PartialEq, Clone, Hash, Eq)]
 pub enum Export {
-    Function(String, Results)
+    Function(String, Params, Results)
 }
 
 pub type Import = String;
@@ -136,15 +136,14 @@ fn build_ast(pair: Pair<Rule>, variables: &mut Variables, modules: &mut Modules)
             if let Language::Module(module_name, functions, _instructions, exports, _imports) = &module {
                 for export in exports {
                     match export {
-                        Export::Function(function_name, value_type) => {
-                            variables.insert(format!("{}::{}", module_name, function_name), value_type.clone());
+                        Export::Function(function_name, _params, returns) => {
+                            variables.insert(format!("{}", function_name), returns.clone());
                         }
                     }
                 }
             }
 
             modules.push(module);
-
 
             Ok(Language::Import(path.to_string()))
         },
@@ -316,9 +315,9 @@ fn build_ast(pair: Pair<Rule>, variables: &mut Variables, modules: &mut Modules)
                 let ast = build_ast(instruction, variables, modules)?;
 
                 match &ast {
-                    Language::Function(name, _, returns, _, visibility) => {
+                    Language::Function(name, params, returns, _, visibility) => {
                         match visibility {
-                            Visiblitity::Public => exports.push(Export::Function(name.clone(), returns.clone())),
+                            Visiblitity::Public => exports.push(Export::Function(name.clone(), params.clone(), returns.clone())),
                             Visiblitity::Private => ()
                         }
 
@@ -412,8 +411,6 @@ pub fn to_ast(original: &str, variables: &mut Variables) -> Result<Language, Err
 }
 
 pub fn to_ast_from_file(filepath: &str) -> Result<Language, Error<Rule>> {
-    println!("to_ast filepath {}", filepath);
-
     let file = fs::read_to_string(format!("{}.star", filepath)).expect("Something went wrong reading the file");
 
     let mut variables = Variables::new();
@@ -534,7 +531,7 @@ mod test {
             Visiblitity::Public,
         );
 
-        let exports = vec![Export::Function("tres".to_string(), vec![ValueType::Integer])];
+        let exports = vec![Export::Function("tres".to_string(), vec![], vec![ValueType::Integer])];
         let imports = vec![];
         let expected  = Language::Module("awesome".to_string(), vec![function], vec![], exports, imports);
 
@@ -828,7 +825,7 @@ mod test {
             Module("test".to_string(),
                 vec![Function("hello".to_string(), vec![], vec![ValueType::Integer], vec![Number(42)], Visiblitity::Public)],
                 vec![],
-                vec![Export::Function("hello".to_string(), vec![ValueType::Integer])],
+                vec![Export::Function("hello".to_string(), vec![], vec![ValueType::Integer])],
                 vec![]
             ),
             Import("test".to_string())
@@ -850,7 +847,7 @@ mod test {
         ";
 
         let function = Function("hello".to_string(), vec![], vec![ValueType::Integer], vec![Number(42)], Visiblitity::Public);
-        let export = Export::Function("hello".to_string(), vec![ValueType::Integer]);
+        let export = Export::Function("hello".to_string(), vec![], vec![ValueType::Integer]);
         let test_module = Module("test".to_string(), vec![function], vec![], vec![export], vec![]);
 
         let instruction = Call("test::hello".to_string(), vec![], vec![ValueType::Integer]);

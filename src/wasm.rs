@@ -6,6 +6,7 @@ pub struct Data {
     pointers: HashMap<String, (usize, usize)>,
     memory: String,
     variables: Variables,
+    modules: HashMap<String, Language>,
 }
 
 pub fn to_wasm(node: &Language, data: &mut Data) -> String {
@@ -21,6 +22,7 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
         Language::Number(number) => {
             format!("(i32.const {})", number)
         },
+        Language::Import(_) => { "".to_string() },
         Language::Float(float) => {
             format!("(f32.const {})", float)
         },
@@ -111,8 +113,47 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
                 .collect::<Vec<String>>()
                 .join(" ")
         },
-        Language::Module(name, functions, instructions, exports, _imports) => {
+        Language::Module(name, functions, instructions, exports, imports) => {
             let mut exports = exports.clone();
+
+            data.modules.insert(name.to_owned(), node.clone());
+
+            let imports_str = imports.into_iter()
+                .map( |import_name| {
+                    let module = data.modules.get(import_name).unwrap();
+
+                    match module {
+                        Language::Module(name, functions, instructions, exports, _imports) => {
+                            exports.into_iter().map( |export| {
+                                match export {
+                                    Export::Function(function_name, params, results) => {
+                                        let results_str = value_types_to_wasm(results);
+
+                                        let params_types = params.iter().map(|param| param.1.clone() ).collect::<Vec<ValueType>>();
+
+                                        let params_str = if params.len() > 0 {
+                                            let params_str = value_types_to_wasm(&params_types);
+
+                                            format!("(param {})", params_str)
+                                        } else {
+                                            "".to_string()
+                                        };
+
+                                        let import_function_name = format!("{}", function_name);
+
+                                        format!("(import \"{}\" \"{}\" (func ${} {} (result {})))", import_name, import_function_name, function_name, params_str, results_str)
+                                    },
+                                    _ => unreachable!()
+                                }
+                            })
+                            .collect::<Vec<String>>()
+                            .join(" ")
+                        },
+                        _ => unreachable!()
+                    }
+                })
+                .collect::<Vec<String>>()
+                .join(" ");
 
             let functions_str = functions.into_iter()
                 .map( |language| to_wasm(language, data) )
@@ -135,7 +176,7 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
                     Visiblitity::Public
                 );
 
-                exports.push(Export::Function("main".to_string(), value_types.clone()));
+                exports.push(Export::Function("main".to_string(), vec![], value_types.clone()));
 
                 to_wasm(&main, data)
             };
@@ -148,11 +189,11 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
 
             let exports_str = exports.iter().map( |export|
                 match export {
-                    Export::Function(name, _) => format!("(export \"{}\" (func ${}))", name, name)
+                    Export::Function(name, _, _) => format!("(export \"{}\" (func ${}))", name, name)
                 }
             ).collect::<Vec<String>>().join(" ");
 
-            let body = vec![data_str, functions_str, main, exports_str].into_iter()
+            let body = vec![imports_str, data_str, functions_str, main, exports_str].into_iter()
                 .filter( |x| x != "" )
                 .collect::<Vec<String>>()
                 .join(" ");

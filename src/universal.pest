@@ -33,7 +33,7 @@ integer = @{ NUMBER+ }
 
 function_call = { function_name ~ "(" ~ function_params? ~ ")" }
 function_params = { expression ~ ("," ~ expression)* }
-function_name = { name ~ ("::" ~ name)? }
+function_name = { name ~ ("." ~ name)? }
 
 function_def = { public? ~ "fn" ~ name ~ ("(" ~ params? ~ ")")? ~ ":" ~ results ~ block ~ "end" }
 public = { "export" }
