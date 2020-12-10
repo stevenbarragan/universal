@@ -771,14 +771,35 @@ mod test {
             end
         ";
 
-        let instructions = vec![Number(1)];
-        let instructions_2 = vec![Number(2)];
+        let instructions_if = vec![Number(1)];
+        let instructions_else = vec![Number(2)];
 
         let expected = Conditional(
             ConditionalType::If,
             Box::new(Number(1)),
-            Box::new(Language::Block(instructions)),
-            Some(Box::new(Language::Block(instructions_2)))
+            Box::new(Language::Block(instructions_if)),
+            Some(Box::new(Language::Block(instructions_else)))
+        );
+
+        assert_eq!(to_ast(program, &mut variables), Ok(expected));
+
+        let program = "
+            if 1 <= 2
+              1
+            else
+              2
+            end
+        ";
+
+        let instructions_if = vec![Number(1)];
+        let instructions_else = vec![Number(2)];
+        let condition = Infix(Operation::LessThanOrEq, Box::new(Number(1)), Box::new(Number(2)));
+
+        let expected = Conditional(
+            ConditionalType::If,
+            Box::new(condition),
+            Box::new(Language::Block(instructions_if)),
+            Some(Box::new(Language::Block(instructions_else)))
         );
 
         assert_eq!(to_ast(program, &mut variables), Ok(expected));
