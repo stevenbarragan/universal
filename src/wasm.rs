@@ -49,7 +49,7 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
                 Operation::NotEq => "ne",
                 Operation::LessThan => "lt",
                 Operation::MoreThan => "gt",
-                Operation::LessThanOrEq => "le",
+                Operation::LessThanOrEq => "le_s",
                 Operation::MoreThanOrEq => "ge",
                 Operation::Min => "min",
                 Operation::Max => "max",
