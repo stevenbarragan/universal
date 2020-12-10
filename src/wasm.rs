@@ -307,7 +307,7 @@ mod test {
         let mut exports = vec![];
         let imports = vec![];
 
-        exports.push(Export::Function("tres".to_string(), vec![ValueType::Integer]));
+        exports.push(Export::Function("tres".to_string(), vec![], vec![ValueType::Integer]));
 
         let module = Language::Module("awesome".to_string(), vec![function], vec![Number(42)], exports, imports);
 

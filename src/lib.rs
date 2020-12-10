@@ -42,7 +42,8 @@ pub fn execute(string: &str) -> anyhow::Result<()> {
             let mut instances = vec![];
 
             for module in modules {
-                let binary = wat::parse_str(wasm::to_wasm(&module, &mut data))?;
+                let wasm = wasm::to_wasm(&module, &mut data);
+                let binary = wat::parse_str(wasm)?;
 
                 match module {
                     Language::Module(name, _functions, _instructions, _exports, _imports) => {
@@ -61,12 +62,12 @@ pub fn execute(string: &str) -> anyhow::Result<()> {
             if let Some(program) = instances.last() {
                 let main = program
                     .get_func("main")
-                    .ok_or(anyhow::format_err!("failed to find `run` function export"))?
+                    .ok_or(anyhow::format_err!("failed to find `main` function export"))?
                     .get0::<i32>()?;
 
                 let result = main()?;
 
-                println!("result: {:?}", result);
+                println!("result: {}", result);
             }
 
             Ok(())

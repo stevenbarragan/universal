@@ -850,7 +850,7 @@ mod test {
             module main
                 import test
 
-                test::hello()
+                hello()
             end
         ";
 
@@ -858,7 +858,7 @@ mod test {
         let export = Export::Function("hello".to_string(), vec![], vec![ValueType::Integer]);
         let test_module = Module("test".to_string(), vec![function], vec![], vec![export], vec![]);
 
-        let instruction = Call("test::hello".to_string(), vec![], vec![ValueType::Integer]);
+        let instruction = Call("hello".to_string(), vec![], vec![ValueType::Integer]);
         let main_module = Module("main".to_string(), vec![], vec![instruction], vec![], vec!["test".to_string()]);
 
         let expected = Program(vec![test_module, main_module]);
