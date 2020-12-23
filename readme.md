@@ -25,7 +25,7 @@ Universal doesn't pretend to support all features from each language but define 
 It won't be limited to mirror existing syntaxes but it'll support new ones as well.
 
 rust like
-```
+```rust
 pub fn factorial(number: Int) -> Int {
   let limit = 1;
 
@@ -38,7 +38,7 @@ pub fn factorial(number: Int) -> Int {
 ```
 
 ruby like
-```
+```rb
 export def factorial(number: Int) : Int
   limit = 1
 
@@ -51,7 +51,7 @@ end
 ```
 
 typescript like
-```
+```ts
 export function factorial(number: Int) -> Int {
   let limit = 1;
 
