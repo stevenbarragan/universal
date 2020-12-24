@@ -39,14 +39,23 @@ pub fn execute(string: &str) -> anyhow::Result<()> {
 	    let wasi = Wasi::new(&store, WasiCtx::new(std::env::args())?);
 	    wasi.add_to_linker(&mut linker)?;
 
+            linker.func("std", "puts", |x: i32| { println!("{}", x); x})?;
+            linker.func("std", "print", |x: i32| { print!("{}", x); x})?;
+
             let mut instances = vec![];
 
             for module in modules {
-                let wasm = wasm::to_wasm(&module, &mut data);
-                let binary = wat::parse_str(wasm)?;
-
-                match module {
+                match &module {
                     Language::Module(name, _functions, _instructions, _exports, _imports) => {
+                        let wasm = wasm::to_wasm(&module, &mut data);
+
+                        // std library is auto
+                        if name == "std" {
+                            continue;
+                        }
+
+                        let binary = wat::parse_str(wasm)?;
+
                         let wasm_module = Module::from_binary(&engine, binary.as_ref())?;
 
                         let instance = linker.instantiate(&wasm_module)?;
@@ -66,8 +75,6 @@ pub fn execute(string: &str) -> anyhow::Result<()> {
                     .get0::<i32>()?;
 
                 let result = main()?;
-
-                println!("result: {}", result);
             }
 
             Ok(())

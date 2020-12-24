@@ -38,7 +38,7 @@ function_name = { name ~ ("." ~ name)? }
 function_def = { public? ~ "fn" ~ name ~ ("(" ~ params? ~ ")")? ~ ":" ~ results ~ block ~ "end" }
 public = { "export" }
 
-block = { (NEWLINE* ~ expression)+ ~ NEWLINE* }
+block = { (NEWLINE* ~ expression)* ~ NEWLINE* }
 
 results = { kind ~ ("," ~ kind)* }
 params = { param ~ ("," ~ param)* }
