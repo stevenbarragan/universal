@@ -49,7 +49,7 @@ pub fn execute(string: &str) -> anyhow::Result<()> {
                     Language::Module(name, _functions, _instructions, _exports, _imports) => {
                         let wasm = wasm::to_wasm(&module, &mut data);
 
-                        // std library is auto
+                        // std library is autoloaded
                         if name == "std" {
                             continue;
                         }
@@ -69,12 +69,9 @@ pub fn execute(string: &str) -> anyhow::Result<()> {
             }
 
             if let Some(program) = instances.last() {
-                let main = program
-                    .get_func("main")
+                program.get_func("main")
                     .ok_or(anyhow::format_err!("failed to find `main` function export"))?
-                    .get0::<i32>()?;
-
-                let result = main()?;
+                    .call(&[])?; 
             }
 
             Ok(())

@@ -1,4 +1,4 @@
 import std
 import factorial
 
-puts(factorial(3))
+puts(factorial(5))
