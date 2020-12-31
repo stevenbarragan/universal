@@ -1,5 +1,8 @@
 use pest::Parser;
+use pest::error::Error;
+use pest::iterators::{Pair,Pairs};
 use std::collections::HashMap;
+use std::fmt;
 use std::fs;
 use std::path::Path;
 
@@ -14,6 +17,18 @@ pub enum ValueType {
     Integer,
     Native(String),
     Symbol,
+}
+
+impl fmt::Display for ValueType {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> Result<(), ::std::fmt::Error> {
+	match self {
+            ValueType::Bool => f.write_str("bool"),
+            ValueType::Float => f.write_str("float"),
+            ValueType::Integer => f.write_str("int"),
+            ValueType::Native(native_type) => f.write_str(&native_type),
+            ValueType::Symbol => f.write_str("symbol"),
+	}
+    }
 }
 
 pub type Block = Vec<Language>;
@@ -113,8 +128,26 @@ pub fn find_value_type(node: &Language) -> Vec<ValueType> {
     }
 }
 
-use pest::error::Error;
-use pest::iterators::{Pair,Pairs};
+pub fn build_function_key(function_name: &str, params: &Params) -> String {
+    let value_types = params.into_iter()
+        .map(|(_, value_type)| value_type.clone() )
+        .collect::<Vec<ValueType>>();
+
+    function_key(function_name, &value_types)
+}
+
+pub fn function_key(function_name: &str, value_types: &Vec<ValueType>) -> String {
+    if value_types.is_empty() {
+        return function_name.to_owned()
+    }
+
+    let value_types_str = value_types.into_iter()
+        .map(|value_type| format!("{}", value_type ))
+        .collect::<Vec<String>>()
+        .join("_");
+
+    format!("{}_{}", function_name, value_types_str)
+}
 
 fn build_ast(pair: Pair<Rule>, variables: &mut Variables, modules: &mut Modules) -> Result<Language, Error<Rule>> {
     match pair.as_rule() {
@@ -137,8 +170,10 @@ fn build_ast(pair: Pair<Rule>, variables: &mut Variables, modules: &mut Modules)
             if let Language::Module(module_name, functions, _instructions, exports, _imports) = &module {
                 for export in exports {
                     match export {
-                        Export::Function(function_name, _params, returns) => {
-                            variables.insert(format!("{}", function_name), returns.clone());
+                        Export::Function(function_name, params, returns) => {
+                            let name_key = build_function_key(&function_name, &params);
+
+                            variables.insert(format!("{}", name_key), returns.clone());
                         }
                     }
                 }
@@ -212,7 +247,7 @@ fn build_ast(pair: Pair<Rule>, variables: &mut Variables, modules: &mut Modules)
                 elem = inner.next().unwrap();
             }
 
-            let name = elem.as_str().to_string();
+            let function_name = elem.as_str().to_string();
             elem = inner.next().unwrap();
 
             if elem.as_rule() == Rule::public {
@@ -249,7 +284,9 @@ fn build_ast(pair: Pair<Rule>, variables: &mut Variables, modules: &mut Modules)
                     results.push(kind);
                 }
 
-                variables.insert(name.to_string(), results.clone());
+                let name_key = build_function_key(&function_name, &params);
+
+                variables.insert(name_key, results.clone());
 
                 elem = inner.next().unwrap();
             }
@@ -262,7 +299,7 @@ fn build_ast(pair: Pair<Rule>, variables: &mut Variables, modules: &mut Modules)
                 }
             }
 
-            Ok(Language::Function(name, params, results, instructions, visibility.clone()))
+            Ok(Language::Function(function_name, params, results, instructions, visibility.clone()))
         },
         Rule::block => {
             let mut instructions = vec![];
@@ -277,7 +314,7 @@ fn build_ast(pair: Pair<Rule>, variables: &mut Variables, modules: &mut Modules)
         Rule::function_call => {
             let mut inner = pair.into_inner();
 
-            let name = inner.next().unwrap().as_str().to_string();
+            let function_name = inner.next().unwrap().as_str().to_string();
 
             let mut params = vec![];
 
@@ -289,13 +326,20 @@ fn build_ast(pair: Pair<Rule>, variables: &mut Variables, modules: &mut Modules)
                 }
             }
 
-            if let Some(value_type) = variables.get(&name) {
-                Ok(Language::Call(name, params, value_type.clone()))
+            let param_types = params.iter()
+                .map(|param| find_value_type(param))
+                .flatten()
+                .collect::<Vec<ValueType>>();
+
+            let name_key = function_key(&function_name, &param_types);
+
+            if let Some(value_type) = variables.get(&name_key) {
+                Ok(Language::Call(function_name, params, value_type.clone()))
             } else {
                 println!("variables: {:?}", variables);
                 println!("modules: {:?}", modules);
 
-                panic!("No variable found {}", name)
+                panic!("No variable found {}", name_key)
             }
         },
         Rule::module => {
@@ -588,6 +632,7 @@ mod test {
         let mut variables = Variables::new();
 
         variables.insert("add".to_string(), vec![ValueType::Integer]);
+        variables.insert("add_int".to_string(), vec![ValueType::Integer]);
 
         assert_eq!(to_ast("add()", &mut variables), Ok(Call("add".to_string(), vec![], vec![ValueType::Integer])));
         assert_eq!(to_ast("add(1)", &mut variables), Ok(Call("add".to_string(), vec![Number(1)], vec![ValueType::Integer])));

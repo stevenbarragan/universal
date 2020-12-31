@@ -65,7 +65,8 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
                 .collect::<Vec<String>>()
                 .join(" ");
 
-            let results = results.into_iter() .map( |value_type| format!("(result {})", value_type_to_wasm(value_type)))
+            let results = results.into_iter()
+                .map( |value_type| format!("(result {})", value_type_to_wasm(value_type)))
                 .collect::<Vec<String>>()
                 .join(" ");
 
@@ -84,7 +85,9 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
                 .collect::<Vec<String>>()
                 .join(" ");
 
-            format!("(func ${} {})", name, body)
+            let name_key = build_function_key(&name, &params);
+
+            format!("(func ${} {})", name_key, body)
         },
         Language::Symbol(string) => {
             if let Some(position) = data.pointers.get(string) {
@@ -100,12 +103,19 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
             }
         },
         Language::Call(function_name, params, _) => {
-            let params = params.into_iter()
+            let params_str = params.into_iter()
                 .map( |language| to_wasm(language, data) )
                 .collect::<Vec<String>>()
                 .join(" ");
 
-            format!("(call ${} {})", function_name, params)
+            let param_types = params.into_iter()
+                .map(|param| find_value_type(param))
+                .flatten()
+                .collect::<Vec<ValueType>>();
+
+            let name_key = function_key(&function_name, &param_types);
+
+            format!("(call ${} {})", name_key, params_str)
         },
         Language::Block(instructions) => {
             instructions.into_iter()
@@ -129,7 +139,9 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
                                     Export::Function(function_name, params, results) => {
                                         let results_str = value_types_to_wasm(results);
 
-                                        let params_types = params.iter().map(|param| param.1.clone() ).collect::<Vec<ValueType>>();
+                                        let params_types = params.iter()
+                                            .map(|param| param.1.clone())
+                                            .collect::<Vec<ValueType>>();
 
                                         let params_str = if params.len() > 0 {
                                             let params_str = value_types_to_wasm(&params_types);
@@ -139,9 +151,9 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
                                             "".to_string()
                                         };
 
-                                        let import_function_name = format!("{}", function_name);
+                                        let name_key = build_function_key(&function_name, &params);
 
-                                        format!("(import \"{}\" \"{}\" (func ${} {} (result {})))", import_name, import_function_name, function_name, params_str, results_str)
+                                        format!("(import \"{}\" \"{}\" (func ${} {} (result {})))", import_name, name_key, name_key, params_str, results_str)
                                     },
                                     _ => unreachable!()
                                 }
@@ -189,7 +201,11 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
 
             let exports_str = exports.iter().map( |export|
                 match export {
-                    Export::Function(name, _, _) => format!("(export \"{}\" (func ${}))", name, name)
+                    Export::Function(function_name, params, _) => {
+                        let name_key = build_function_key(&function_name, &params);
+
+                        format!("(export \"{}\" (func ${}))", name_key, name_key)
+                    }
                 }
             ).collect::<Vec<String>>().join(" ");
 
@@ -253,7 +269,7 @@ mod test {
             Visiblitity::Private,
         );
 
-        assert_eq!(to_wasm(&function, &mut data), "(func $add2 (param $num i32) (result i32) (i32.add (local.get $num) (i32.const 2)))");
+        assert_eq!(to_wasm(&function, &mut data), "(func $add2_int (param $num i32) (result i32) (i32.add (local.get $num) (i32.const 2)))");
 
         let mut variables = HashMap::new();
 
@@ -278,7 +294,7 @@ mod test {
         match function_ast {
             Ok(function) =>  {
                 assert_eq!(to_wasm(&function, &mut data), 
-                    "(func $tres (param $x i32) (result i32) (local $num i32) (local.set $num (i32.const 3)) (i32.add (local.get $x) (local.get $num)))");
+                    "(func $tres_int (param $x i32) (result i32) (local $num i32) (local.set $num (i32.const 3)) (i32.add (local.get $x) (local.get $num)))");
             },
             Err(e) => println!("{}", e),
         }

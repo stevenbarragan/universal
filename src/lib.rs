@@ -39,8 +39,8 @@ pub fn execute(string: &str) -> anyhow::Result<()> {
 	    let wasi = Wasi::new(&store, WasiCtx::new(std::env::args())?);
 	    wasi.add_to_linker(&mut linker)?;
 
-            linker.func("std", "puts", |x: i32| { println!("{}", x); x})?;
-            linker.func("std", "print", |x: i32| { print!("{}", x); x})?;
+            linker.func("std", "puts_int", |x: i32| { println!("{}", x); x})?;
+            linker.func("std", "print_int", |x: i32| { print!("{}", x); x})?;
 
             let mut instances = vec![];
 
