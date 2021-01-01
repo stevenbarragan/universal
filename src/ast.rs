@@ -1,6 +1,6 @@
-use pest::Parser;
 use pest::error::Error;
-use pest::iterators::{Pair,Pairs};
+use pest::iterators::{Pair, Pairs};
+use pest::Parser;
 use std::collections::HashMap;
 use std::fmt;
 use std::fs;
@@ -21,13 +21,13 @@ pub enum ValueType {
 
 impl fmt::Display for ValueType {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> Result<(), ::std::fmt::Error> {
-	match self {
+        match self {
             ValueType::Bool => f.write_str("bool"),
             ValueType::Float => f.write_str("float"),
             ValueType::Integer => f.write_str("int"),
             ValueType::Native(native_type) => f.write_str(&native_type),
             ValueType::Symbol => f.write_str("symbol"),
-	}
+        }
     }
 }
 
@@ -61,24 +61,35 @@ pub enum Operation {
 }
 
 #[derive(Debug, PartialEq, Clone, Hash, Eq)]
-pub enum ConditionalType {If, Unless}
+pub enum ConditionalType {
+    If,
+    Unless,
+}
 
 #[derive(Debug, PartialEq, Clone, Hash, Eq)]
 pub enum Export {
-    Function(String, Params, Results)
+    Function(String, Params, Results),
 }
 
 pub type Import = String;
 
 #[derive(Debug, PartialEq, Clone, Hash, Eq, Copy)]
-pub enum Visiblitity { Public, Private }
+pub enum Visiblitity {
+    Public,
+    Private,
+}
 
 #[derive(Debug, PartialEq, Clone, Hash, Eq)]
 pub enum Language {
     Block(Block),
     Boolean(bool),
     Call(String, Block, Results),
-    Conditional(ConditionalType, Box<Language>, Box<Language>, Option<Box<Language>>),
+    Conditional(
+        ConditionalType,
+        Box<Language>,
+        Box<Language>,
+        Option<Box<Language>>,
+    ),
     Float(String),
     Function(String, Params, Results, Block, Visiblitity),
     Import(Import),
@@ -95,33 +106,31 @@ pub fn find_value_type(node: &Language) -> Vec<ValueType> {
         Language::Variable(_, value_type) => value_type.clone(),
         Language::Number(_) => vec![ValueType::Integer],
         Language::Float(_) => vec![ValueType::Float],
-        Language::Infix(_, _, right) => {
-            find_value_type(right)
-        },
+        Language::Infix(_, _, right) => find_value_type(right),
         Language::Function(_, _, results, _, _) => results.clone(),
         Language::Call(_, _, value_type) => value_type.clone(),
         Language::Block(instructions) => {
             if let Some(instruction) = instructions.last() {
-                find_value_type(instruction) 
+                find_value_type(instruction)
             } else {
                 panic!("No instructions")
             }
         }
         Language::Module(_, _, instructions, _, _) => {
             if let Some(instruction) = instructions.last() {
-                find_value_type(instruction) 
+                find_value_type(instruction)
             } else {
                 panic!("No instructions")
             }
-        },
+        }
         Language::Symbol(_) => vec![ValueType::Symbol],
         Language::Conditional(_, _, _, instructions) => {
             if let Some(instruction) = instructions {
-                find_value_type(instruction) 
+                find_value_type(instruction)
             } else {
                 panic!("No instructions")
             }
-        },
+        }
         Language::Boolean(_) => vec![ValueType::Bool],
         Language::Import(_) => panic!("No value type for import"),
         Language::Program(_) => panic!("No value type for program"),
@@ -129,8 +138,9 @@ pub fn find_value_type(node: &Language) -> Vec<ValueType> {
 }
 
 pub fn build_function_key(function_name: &str, params: &Params) -> String {
-    let value_types = params.into_iter()
-        .map(|(_, value_type)| value_type.clone() )
+    let value_types = params
+        .into_iter()
+        .map(|(_, value_type)| value_type.clone())
         .collect::<Vec<ValueType>>();
 
     function_key(function_name, &value_types)
@@ -138,18 +148,23 @@ pub fn build_function_key(function_name: &str, params: &Params) -> String {
 
 pub fn function_key(function_name: &str, value_types: &Vec<ValueType>) -> String {
     if value_types.is_empty() {
-        return function_name.to_owned()
+        return function_name.to_owned();
     }
 
-    let value_types_str = value_types.into_iter()
-        .map(|value_type| format!("{}", value_type ))
+    let value_types_str = value_types
+        .into_iter()
+        .map(|value_type| format!("{}", value_type))
         .collect::<Vec<String>>()
         .join("_");
 
     format!("{}_{}", function_name, value_types_str)
 }
 
-fn build_ast(pair: Pair<Rule>, variables: &mut Variables, modules: &mut Modules) -> Result<Language, Error<Rule>> {
+fn build_ast(
+    pair: Pair<Rule>,
+    variables: &mut Variables,
+    modules: &mut Modules,
+) -> Result<Language, Error<Rule>> {
     match pair.as_rule() {
         Rule::bool => {
             let value = pair.as_str();
@@ -159,7 +174,7 @@ fn build_ast(pair: Pair<Rule>, variables: &mut Variables, modules: &mut Modules)
             } else {
                 Ok(Language::Boolean(false))
             }
-        },
+        }
         Rule::import => {
             let mut inner = pair.into_inner();
 
@@ -167,7 +182,9 @@ fn build_ast(pair: Pair<Rule>, variables: &mut Variables, modules: &mut Modules)
 
             let module = to_ast_from_file(path)?;
 
-            if let Language::Module(module_name, functions, _instructions, exports, _imports) = &module {
+            if let Language::Module(module_name, functions, _instructions, exports, _imports) =
+                &module
+            {
                 for export in exports {
                     match export {
                         Export::Function(function_name, params, returns) => {
@@ -182,17 +199,17 @@ fn build_ast(pair: Pair<Rule>, variables: &mut Variables, modules: &mut Modules)
             modules.push(module);
 
             Ok(Language::Import(path.to_string()))
-        },
+        }
         Rule::float => {
             let value = pair.as_str();
 
             Ok(Language::Float(value.to_owned()))
-        },
+        }
         Rule::integer => {
             let value = pair.as_str().parse().unwrap();
 
             Ok(Language::Number(value))
-        },
+        }
         Rule::variable => {
             let name = pair.as_str().to_string();
 
@@ -201,7 +218,7 @@ fn build_ast(pair: Pair<Rule>, variables: &mut Variables, modules: &mut Modules)
             } else {
                 panic!("variable: ${} not found", name)
             }
-        },
+        }
         Rule::variable_def => {
             let mut inner = pair.into_inner();
 
@@ -213,24 +230,16 @@ fn build_ast(pair: Pair<Rule>, variables: &mut Variables, modules: &mut Modules)
             variables.insert(name.to_string(), vec![value_type.clone()]);
 
             Ok(Language::Variable(name, vec![value_type]))
-        },
-        Rule::unary => {
-            parse_expression(&mut pair.into_inner(), variables, modules)
-        },
-        Rule::boolean => {
-            parse_expression(&mut pair.into_inner(), variables, modules)
-        },
-        Rule::expression => {
-            parse_expression(&mut pair.into_inner(), variables, modules)
-        },
-        Rule::summand => {
-            parse_expression(&mut pair.into_inner(), variables, modules)
-        },
+        }
+        Rule::unary => parse_expression(&mut pair.into_inner(), variables, modules),
+        Rule::boolean => parse_expression(&mut pair.into_inner(), variables, modules),
+        Rule::expression => parse_expression(&mut pair.into_inner(), variables, modules),
+        Rule::summand => parse_expression(&mut pair.into_inner(), variables, modules),
         Rule::primary => {
             let mut inner = pair.into_inner();
 
             build_ast(inner.next().unwrap(), variables, modules)
-        },
+        }
         Rule::function_def => {
             let mut visibility = Visiblitity::Private;
             let mut results = vec![];
@@ -238,7 +247,7 @@ fn build_ast(pair: Pair<Rule>, variables: &mut Variables, modules: &mut Modules)
             let mut instructions = vec![];
 
             let mut inner = pair.into_inner();
-            
+
             let mut elem = inner.next().unwrap();
 
             if elem.as_rule() == Rule::public {
@@ -299,8 +308,14 @@ fn build_ast(pair: Pair<Rule>, variables: &mut Variables, modules: &mut Modules)
                 }
             }
 
-            Ok(Language::Function(function_name, params, results, instructions, visibility.clone()))
-        },
+            Ok(Language::Function(
+                function_name,
+                params,
+                results,
+                instructions,
+                visibility.clone(),
+            ))
+        }
         Rule::block => {
             let mut instructions = vec![];
             let mut inner = pair.into_inner();
@@ -310,7 +325,7 @@ fn build_ast(pair: Pair<Rule>, variables: &mut Variables, modules: &mut Modules)
             }
 
             Ok(Language::Block(instructions))
-        },
+        }
         Rule::function_call => {
             let mut inner = pair.into_inner();
 
@@ -326,7 +341,8 @@ fn build_ast(pair: Pair<Rule>, variables: &mut Variables, modules: &mut Modules)
                 }
             }
 
-            let param_types = params.iter()
+            let param_types = params
+                .iter()
                 .map(|param| find_value_type(param))
                 .flatten()
                 .collect::<Vec<ValueType>>();
@@ -341,7 +357,7 @@ fn build_ast(pair: Pair<Rule>, variables: &mut Variables, modules: &mut Modules)
 
                 panic!("No variable found {}", name_key)
             }
-        },
+        }
         Rule::module => {
             let mut instructions = vec![];
             let mut functions = vec![];
@@ -362,35 +378,45 @@ fn build_ast(pair: Pair<Rule>, variables: &mut Variables, modules: &mut Modules)
                 match &ast {
                     Language::Function(name, params, returns, _, visibility) => {
                         match visibility {
-                            Visiblitity::Public => exports.push(Export::Function(name.clone(), params.clone(), returns.clone())),
-                            Visiblitity::Private => ()
+                            Visiblitity::Public => exports.push(Export::Function(
+                                name.clone(),
+                                params.clone(),
+                                returns.clone(),
+                            )),
+                            Visiblitity::Private => (),
                         }
 
                         functions.push(ast);
-                    },
+                    }
                     Language::Import(filepath) => imports.push(filepath.to_string()),
-                    _ => instructions.push(ast)
+                    _ => instructions.push(ast),
                 }
             }
 
-            Ok(Language::Module(name, functions, instructions, exports, imports))
-        },
+            Ok(Language::Module(
+                name,
+                functions,
+                instructions,
+                exports,
+                imports,
+            ))
+        }
         Rule::symbol => {
             let mut inner = pair.into_inner();
 
             let string = inner.next().unwrap();
 
             Ok(Language::Symbol(string.as_str().to_string()))
-        },
+        }
         Rule::conditional => {
             let mut inner = pair.into_inner();
 
             let kind = match inner.next().unwrap().as_str() {
-                "if" => ConditionalType::If, 
-                "unless" => ConditionalType::Unless, 
-                x => panic!("{} not supported", x)
+                "if" => ConditionalType::If,
+                "unless" => ConditionalType::Unless,
+                x => panic!("{} not supported", x),
             };
-            
+
             let instruction = build_ast(inner.next().unwrap(), variables, modules)?;
             let block = Box::new(build_ast(inner.next().unwrap(), variables, modules)?);
 
@@ -419,33 +445,32 @@ fn str_to_value_type(value_type: &str) -> ValueType {
         "Int" => ValueType::Integer,
         "Float" => ValueType::Float,
         "Symbol" => ValueType::Symbol,
-        kind => ValueType::Native(kind.to_string())
+        kind => ValueType::Native(kind.to_string()),
     }
 }
 
-pub fn to_ast(original: &str, variables: &mut Variables) -> Result<Language, Error<Rule>> {
+pub fn to_ast(original: &str) -> Result<Language, Error<Rule>> {
     let mut block = vec![];
     let mut modules = vec![];
+    let mut variables = Variables::new();
 
     match UniversalParser::parse(Rule::language, original) {
         Ok(pairs) => {
             let mut pair = pairs.into_iter();
 
             match pair.next() {
-                Some(pair) => {
-                    match build_ast(pair, variables, &mut modules) {
-                        Ok(ast) => block.push(ast),
-                        Err(e) => panic!(e)
-                    }
+                Some(pair) => match build_ast(pair, &mut variables, &mut modules) {
+                    Ok(ast) => block.push(ast),
+                    Err(e) => panic!(e),
                 },
-                None => ()
+                None => (),
             }
-        },
-        Err(e) => return Err(e)
+        }
+        Err(e) => return Err(e),
     }
 
     if modules.len() > 0 {
-        return Ok(Language::Program([modules, block].concat()))
+        return Ok(Language::Program([modules, block].concat()));
     }
 
     if block.len() == 1 {
@@ -456,41 +481,39 @@ pub fn to_ast(original: &str, variables: &mut Variables) -> Result<Language, Err
 }
 
 pub fn to_ast_from_file(filepath: &str) -> Result<Language, Error<Rule>> {
-    let mut variables = Variables::new();
-
-    to_ast(&load_file(&filepath), &mut variables)
+    to_ast(&load_file(&filepath))
 }
 
-fn parse_expression(inner: &mut Pairs<Rule>, variables: &mut Variables, modules: &mut Modules) -> Result<Language, Error<Rule>> {
+fn parse_expression(
+    inner: &mut Pairs<Rule>,
+    variables: &mut Variables,
+    modules: &mut Modules,
+) -> Result<Language, Error<Rule>> {
     let summand = build_ast(inner.next().unwrap(), variables, modules)?;
 
     match inner.next() {
-        Some(operator) => {
-            match inner.next() {
-                Some(pair) => {
-                    let summand2 = build_ast(pair, variables, modules)?;
+        Some(operator) => match inner.next() {
+            Some(pair) => {
+                let summand2 = build_ast(pair, variables, modules)?;
 
-                    let instruction = Language::Infix(
-                        str_operator_to_enum(operator.as_str()),
-                        Box::new(summand),
-                        Box::new(summand2)
-                    );
+                let instruction = Language::Infix(
+                    str_operator_to_enum(operator.as_str()),
+                    Box::new(summand),
+                    Box::new(summand2),
+                );
 
-                    match inner.next() {
-                        Some(second_operator) => {
-                            Ok(Language::Infix(
-                                    str_operator_to_enum(second_operator.as_str()),
-                                    Box::new(instruction),
-                                    Box::new(parse_expression(inner, variables, modules)?)
-                            ))
-                        },
-                        None => Ok(instruction)
-                    }
+                match inner.next() {
+                    Some(second_operator) => Ok(Language::Infix(
+                        str_operator_to_enum(second_operator.as_str()),
+                        Box::new(instruction),
+                        Box::new(parse_expression(inner, variables, modules)?),
+                    )),
+                    None => Ok(instruction),
                 }
-                None => panic!("seccond summand missing")
             }
-        }
-        None => Ok(summand)
+            None => panic!("seccond summand missing"),
+        },
+        None => Ok(summand),
     }
 }
 
@@ -512,12 +535,13 @@ fn str_operator_to_enum(operator: &str) -> Operation {
         ">=" => Operation::MoreThanOrEq,
         "min" => Operation::Min,
         "max" => Operation::Max,
-        op => Operation::Native(op.to_string())
+        op => Operation::Native(op.to_string()),
     }
 }
 
 pub fn load_file(filepath: &str) -> String {
-    let file = fs::read_to_string(format!("{}.star", filepath)).expect("Something went wrong reading the file");
+    let file = fs::read_to_string(format!("{}.star", filepath))
+        .expect("Something went wrong reading the file");
 
     let filename = Path::new(filepath).file_stem().unwrap().to_str().unwrap();
 
@@ -531,28 +555,33 @@ mod test {
 
     #[test]
     fn modules() {
-        let mut variables = HashMap::new();
         let exports = vec![];
         let imports = vec![];
 
         let module = to_ast(
-        "module awesome
+            "module awesome
             42
         end
-        ", &mut variables);
+        ",
+        );
 
-        let expected  = Module("awesome".to_string(), vec![], vec![Number(42)], exports, imports);
+        let expected = Module(
+            "awesome".to_string(),
+            vec![],
+            vec![Number(42)],
+            exports,
+            imports,
+        );
 
         assert_eq!(module, Ok(expected));
 
-        let mut variables = HashMap::new();
-
         let module = to_ast(
-        "module awesome
+            "module awesome
             fn tres(): Int
                 3
             end
-        end", &mut variables);
+        end",
+        );
 
         let function = Function(
             "tres".to_string(),
@@ -564,16 +593,23 @@ mod test {
 
         let exports = vec![];
         let imports = vec![];
-        let expected  = Language::Module("awesome".to_string(), vec![function], vec![], exports, imports);
+        let expected = Language::Module(
+            "awesome".to_string(),
+            vec![function],
+            vec![],
+            exports,
+            imports,
+        );
 
         assert_eq!(module, Ok(expected));
 
         let module = to_ast(
-        "module awesome
+            "module awesome
             export fn tres(): Int
                 3
             end
-        end", &mut variables);
+        end",
+        );
 
         let function = Function(
             "tres".to_string(),
@@ -583,170 +619,261 @@ mod test {
             Visiblitity::Public,
         );
 
-        let exports = vec![Export::Function("tres".to_string(), vec![], vec![ValueType::Integer])];
+        let exports = vec![Export::Function(
+            "tres".to_string(),
+            vec![],
+            vec![ValueType::Integer],
+        )];
         let imports = vec![];
-        let expected  = Language::Module("awesome".to_string(), vec![function], vec![], exports, imports);
+        let expected = Language::Module(
+            "awesome".to_string(),
+            vec![function],
+            vec![],
+            exports,
+            imports,
+        );
 
         assert_eq!(module, Ok(expected));
     }
 
     #[test]
     fn constants() {
-        let mut variables = HashMap::new();
+        assert_eq!(to_ast("42"), Ok(Number(42)));
 
-        assert_eq!(to_ast("42", &mut variables), Ok(Number(42)));
-
-        assert_eq!(to_ast("
+        assert_eq!(
+            to_ast(
+                "
                 42
-                ", &mut variables), Ok(Number(42)));
+                ",
+            ),
+            Ok(Number(42))
+        );
     }
 
     #[test]
     fn variables() {
-        let mut variables = Variables::new();
+        let program = "
+            module test
+              x = 5
+              x
+            end
+            ";
 
-        variables.insert("x".to_string(), vec![ValueType::Integer]);
+        let ast = to_ast(program).expect("error loading program");
 
-        assert_eq!(to_ast("x", &mut variables), Ok(Variable("x".to_string(), vec![ValueType::Integer])));
+        let instruction = match ast {
+            Module(_, _, instructions, _, _) => instructions.last()
+                .expect("no instructions on module")
+                .clone(),
+            _ => unreachable!(),
+        };
+
+        assert_eq!(
+            instruction,
+            Variable("x".to_string(), vec![ValueType::Integer])
+        );
     }
 
     #[test]
     fn infix() {
-        let mut variables = HashMap::new();
-
         let instruction = "1 + 2 - 3";
         let expected = Infix(
             Operation::Minus,
-            Box::new(Infix(Operation::Add,
+            Box::new(Infix(
+                Operation::Add,
                 Box::new(Number(1)),
                 Box::new(Number(2)),
             )),
-            Box::new(Number(3))
+            Box::new(Number(3)),
         );
 
-        assert_eq!(to_ast(instruction, &mut variables), Ok(expected))
+        assert_eq!(to_ast(instruction), Ok(expected))
     }
 
     #[test]
     fn function_call() {
-        let mut variables = Variables::new();
+        let program = "
+            module test
+              fn tres(): Int
+                  3
+              end
 
-        variables.insert("add".to_string(), vec![ValueType::Integer]);
-        variables.insert("add_int".to_string(), vec![ValueType::Integer]);
+              fn add(x: Int, y: Int): Int
+                x + y
+              end
 
-        assert_eq!(to_ast("add()", &mut variables), Ok(Call("add".to_string(), vec![], vec![ValueType::Integer])));
-        assert_eq!(to_ast("add(1)", &mut variables), Ok(Call("add".to_string(), vec![Number(1)], vec![ValueType::Integer])));
+              tres()
+              add(1, 2)
+            end
+            ";
+
+        let ast = to_ast(program).expect("error loading program");
+
+        let instructions = match ast {
+            Module(_, _, instructions, _, _) => instructions,
+            _ => unreachable!(),
+        };
+
+        assert_eq!(
+            instructions,
+            vec![
+                Call("tres".to_string(), vec![], vec![ValueType::Integer]),
+                Call(
+                    "add".to_string(),
+                    vec![Number(1), Number(2)],
+                    vec![ValueType::Integer]
+                ),
+            ]
+        );
     }
 
     #[test]
     fn operations() {
-        let mut variables = HashMap::new();
+        assert_eq!(
+            to_ast("5 + 2"),
+            Ok(Infix(
+                Operation::Add,
+                Box::new(Number(5)),
+                Box::new(Number(2))
+            ))
+        );
 
-        assert_eq!(to_ast("5 + 2", &mut variables),
-            Ok(Infix( Operation::Add, Box::new(Number(5)), Box::new(Number(2)))));
+        let program = "
+            module test
+              x = 5
+              x + 1
+            end
+            ";
 
-        variables.insert("x".to_string(), vec![ValueType::Integer]);
+        let ast = to_ast(program).expect("error loading program");
 
-        assert_eq!(to_ast("x + 1", &mut variables),
-            Ok(Infix(Operation::Add, Box::new(Variable ("x".to_string(), vec![ValueType::Integer])), Box::new(Number(1)))));
+        let instruction = match ast {
+            Module(_, _, instructions, _, _) => instructions.last()
+                .expect("no instructions on module")
+                .clone(),
+            _ => unreachable!(),
+        };
+
+        assert_eq!(
+            instruction,
+            Infix(
+                Operation::Add,
+                Box::new(Variable("x".to_string(), vec![ValueType::Integer])),
+                Box::new(Number(1))
+            )
+        );
     }
 
     #[test]
     fn assignations() {
-        let mut variables = HashMap::new();
+        assert_eq!(
+            to_ast("x: Int = 1"),
+            Ok(Infix(
+                Operation::Assignment,
+                Box::new(Variable("x".to_string(), vec![ValueType::Integer])),
+                Box::new(Number(1))
+            ))
+        );
 
-        assert_eq!(to_ast("x: Int = 1", &mut variables),
-            Ok(Infix(Operation::Assignment, Box::new(Variable ("x".to_string(), vec![ValueType::Integer])), Box::new(Number(1)))));
-
-        variables.insert("x".to_string(), vec![ValueType::Integer]);
-
-        assert_eq!(to_ast("x = 1", &mut variables),
-            Ok(Infix(Operation::Assignment, Box::new(Variable ("x".to_string(), vec![ValueType::Integer])), Box::new(Number(1)))));
+        assert_eq!(
+            to_ast("x = 1"),
+            Ok(Infix(
+                Operation::Assignment,
+                Box::new(Variable("x".to_string(), vec![ValueType::Integer])),
+                Box::new(Number(1))
+            ))
+        );
     }
 
     #[test]
     fn functions() {
-        let mut variables = HashMap::new();
-
         let result = to_ast(
-        "fn hello: Int
-            42
-        end", &mut variables);
+            "fn hello: Int
+                42
+            end",
+        );
 
         let expected = Function(
             "hello".to_string(),
             vec![],
             vec![ValueType::Integer],
             vec![Number(42)],
-            Visiblitity::Private
+            Visiblitity::Private,
         );
 
         assert_eq!(result, Ok(expected));
 
-        let mut variables = HashMap::new();
-
         let result = to_ast(
-        "fn hello(num: Int): Int
-          42
-        end", &mut variables);
+            "fn hello(num: Int): Int
+               42
+             end",
+        );
 
         let expected = Function(
             "hello".to_string(),
             vec![("num".to_string(), ValueType::Integer)],
             vec![ValueType::Integer],
             vec![Number(42)],
-            Visiblitity::Private
+            Visiblitity::Private,
         );
 
         assert_eq!(result, Ok(expected));
 
-        let mut variables = HashMap::new();
-
         let result = to_ast(
-        "fn hello(num: Int): Int
-            num
-        end", &mut variables);
+            "fn hello(num: Int): Int
+              num
+             end",
+        );
 
         let expected = Function(
             "hello".to_string(),
             vec![("num".to_string(), ValueType::Integer)],
             vec![ValueType::Integer],
             vec![Variable("num".to_string(), vec![ValueType::Integer])],
-            Visiblitity::Private
+            Visiblitity::Private,
         );
 
         assert_eq!(result, Ok(expected));
 
-        let mut variables = HashMap::new();
-
         let result = to_ast(
-        "fn hello(num: Int): Int
-            num + 2
-        end", &mut variables);
+            "fn hello(num: Int): Int
+               num + 2
+             end",
+        );
 
         let expected = Function(
             "hello".to_string(),
             vec![("num".to_string(), ValueType::Integer)],
             vec![ValueType::Integer],
-            vec![Infix(Operation::Add, Box::new(Variable ("num".to_string(), vec![ValueType::Integer])), Box::new(Number(2)))],
-            Visiblitity::Private
+            vec![Infix(
+                Operation::Add,
+                Box::new(Variable("num".to_string(), vec![ValueType::Integer])),
+                Box::new(Number(2)),
+            )],
+            Visiblitity::Private,
         );
 
         assert_eq!(result, Ok(expected));
 
-        let mut variables = HashMap::new();
-
         let result = to_ast(
-        "fn add(num: Int, num2: Int): Int
-            num + num2
-        end", &mut variables);
+            "fn add(num: Int, num2: Int): Int
+               num + num2
+             end",
+        );
 
         let expected = Function(
             "add".to_string(),
-            vec![("num".to_string(), ValueType::Integer), ("num2".to_string(), ValueType::Integer)],
+            vec![
+                ("num".to_string(), ValueType::Integer),
+                ("num2".to_string(), ValueType::Integer),
+            ],
             vec![ValueType::Integer],
-            vec![Infix(Operation::Add, Box::new(Variable ("num".to_string(), vec![ValueType::Integer])), Box::new(Variable ("num2".to_string(), vec![ValueType::Integer])))],
-            Visiblitity::Private
+            vec![Infix(
+                Operation::Add,
+                Box::new(Variable("num".to_string(), vec![ValueType::Integer])),
+                Box::new(Variable("num2".to_string(), vec![ValueType::Integer])),
+            )],
+            Visiblitity::Private,
         );
 
         assert_eq!(result, Ok(expected));
@@ -754,16 +881,15 @@ mod test {
 
     #[test]
     fn strings() {
-        let mut variables = HashMap::new();
-
-        assert_eq!(to_ast(":42", &mut variables), Ok(Symbol("42".to_string())));
-        assert_eq!(to_ast(":\"steven barragan\"", &mut variables), Ok(Symbol("steven barragan".to_string())));
+        assert_eq!(to_ast(":42"), Ok(Symbol("42".to_string())));
+        assert_eq!(
+            to_ast(":\"steven barragan\""),
+            Ok(Symbol("steven barragan".to_string()))
+        );
     }
 
     #[test]
     fn conditionals_if() {
-        let mut variables = HashMap::new();
-
         let program = "
             if 1
               1
@@ -776,16 +902,14 @@ mod test {
             ConditionalType::If,
             Box::new(Number(1)),
             Box::new(Language::Block(instructions)),
-            None
+            None,
         );
 
-        assert_eq!(to_ast(program, &mut variables), Ok(expected));
+        assert_eq!(to_ast(program), Ok(expected));
     }
 
     #[test]
     fn conditionals_unless() {
-        let mut variables = HashMap::new();
-
         let program = "
             unless 1
               2
@@ -798,16 +922,14 @@ mod test {
             ConditionalType::Unless,
             Box::new(Number(1)),
             Box::new(Language::Block(instructions)),
-            None
+            None,
         );
 
-        assert_eq!(to_ast(program, &mut variables), Ok(expected));
+        assert_eq!(to_ast(program), Ok(expected));
     }
 
     #[test]
     fn conditionals_if_else() {
-        let mut variables = HashMap::new();
-
         let program = "
             if 1
               1
@@ -823,10 +945,10 @@ mod test {
             ConditionalType::If,
             Box::new(Number(1)),
             Box::new(Language::Block(instructions_if)),
-            Some(Box::new(Language::Block(instructions_else)))
+            Some(Box::new(Language::Block(instructions_else))),
         );
 
-        assert_eq!(to_ast(program, &mut variables), Ok(expected));
+        assert_eq!(to_ast(program), Ok(expected));
 
         let program = "
             if 1 <= 2
@@ -838,22 +960,24 @@ mod test {
 
         let instructions_if = vec![Number(1)];
         let instructions_else = vec![Number(2)];
-        let condition = Infix(Operation::LessThanOrEq, Box::new(Number(1)), Box::new(Number(2)));
+        let condition = Infix(
+            Operation::LessThanOrEq,
+            Box::new(Number(1)),
+            Box::new(Number(2)),
+        );
 
         let expected = Conditional(
             ConditionalType::If,
             Box::new(condition),
             Box::new(Language::Block(instructions_if)),
-            Some(Box::new(Language::Block(instructions_else)))
+            Some(Box::new(Language::Block(instructions_else))),
         );
 
-        assert_eq!(to_ast(program, &mut variables), Ok(expected));
+        assert_eq!(to_ast(program), Ok(expected));
     }
 
     #[test]
     fn conditionals_if_eq() {
-        let mut variables = HashMap::new();
-
         let program = "
             if 1 == 1
               1
@@ -862,56 +986,63 @@ mod test {
 
         let expected = Conditional(
             ConditionalType::If,
-            Box::new(Infix(Operation::Equal, Box::new(Number(1)), Box::new(Number(1)))),
+            Box::new(Infix(
+                Operation::Equal,
+                Box::new(Number(1)),
+                Box::new(Number(1)),
+            )),
             Box::new(Language::Block(vec![Number(1)])),
-            None
+            None,
         );
 
-        assert_eq!(to_ast(program, &mut variables), Ok(expected));
+        assert_eq!(to_ast(program), Ok(expected));
     }
 
     #[test]
     fn booleans() {
-        let mut variables = HashMap::new();
-
         let program = "true";
         let expected = Boolean(true);
 
-        assert_eq!(to_ast(program, &mut variables), Ok(expected))
+        assert_eq!(to_ast(program), Ok(expected))
     }
 
     #[test]
     fn floats() {
-        let mut variables = HashMap::new();
-
         let program = "2.23";
         let expected = Float("2.23".to_owned());
 
-        assert_eq!(to_ast(program, &mut variables), Ok(expected))
+        assert_eq!(to_ast(program), Ok(expected))
     }
 
     #[test]
     fn imports() {
-        let mut variables = HashMap::new();
-
         let program = "import test";
         let expected = Program(vec![
-            Module("test".to_string(),
-                vec![Function("hello".to_string(), vec![], vec![ValueType::Integer], vec![Number(42)], Visiblitity::Public)],
+            Module(
+                "test".to_string(),
+                vec![Function(
+                    "hello".to_string(),
+                    vec![],
+                    vec![ValueType::Integer],
+                    vec![Number(42)],
+                    Visiblitity::Public,
+                )],
                 vec![],
-                vec![Export::Function("hello".to_string(), vec![], vec![ValueType::Integer])],
-                vec![]
+                vec![Export::Function(
+                    "hello".to_string(),
+                    vec![],
+                    vec![ValueType::Integer],
+                )],
+                vec![],
             ),
-            Import("test".to_string())
+            Import("test".to_string()),
         ]);
 
-        assert_eq!(to_ast(program, &mut variables), Ok(expected))
+        assert_eq!(to_ast(program), Ok(expected))
     }
 
     #[test]
     fn program() {
-        let  mut variables = HashMap::new();
-
         let program = "
             module main
                 import test
@@ -920,15 +1051,33 @@ mod test {
             end
         ";
 
-        let function = Function("hello".to_string(), vec![], vec![ValueType::Integer], vec![Number(42)], Visiblitity::Public);
+        let function = Function(
+            "hello".to_string(),
+            vec![],
+            vec![ValueType::Integer],
+            vec![Number(42)],
+            Visiblitity::Public,
+        );
         let export = Export::Function("hello".to_string(), vec![], vec![ValueType::Integer]);
-        let test_module = Module("test".to_string(), vec![function], vec![], vec![export], vec![]);
+        let test_module = Module(
+            "test".to_string(),
+            vec![function],
+            vec![],
+            vec![export],
+            vec![],
+        );
 
         let instruction = Call("hello".to_string(), vec![], vec![ValueType::Integer]);
-        let main_module = Module("main".to_string(), vec![], vec![instruction], vec![], vec!["test".to_string()]);
+        let main_module = Module(
+            "main".to_string(),
+            vec![],
+            vec![instruction],
+            vec![],
+            vec!["test".to_string()],
+        );
 
         let expected = Program(vec![test_module, main_module]);
 
-        assert_eq!(to_ast(program, &mut variables), Ok(expected));
+        assert_eq!(to_ast(program), Ok(expected));
     }
 }

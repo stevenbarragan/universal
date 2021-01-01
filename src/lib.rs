@@ -1,10 +1,10 @@
-pub mod compiler;
 pub mod ast;
+pub mod compiler;
 pub mod wasm;
 
 use std::fs;
-use std::str;
 use std::path::Path;
+use std::str;
 use wat;
 
 use anyhow::Result;
@@ -26,21 +26,26 @@ pub fn execute_file(filepath: &str) -> anyhow::Result<()> {
 }
 
 pub fn execute(string: &str) -> anyhow::Result<()> {
-    let mut variables = ast::Variables::new();
     let mut data: wasm::Data = Default::default();
-    let ast = to_ast(string, &mut variables)?;
+    let ast = to_ast(string)?;
 
     match ast {
         Language::Program(modules) => {
-	    let engine = Engine::default();
-	    let store = Store::new(&engine);
+            let engine = Engine::default();
+            let store = Store::new(&engine);
 
-	    let mut linker = Linker::new(&store);
-	    let wasi = Wasi::new(&store, WasiCtx::new(std::env::args())?);
-	    wasi.add_to_linker(&mut linker)?;
+            let mut linker = Linker::new(&store);
+            let wasi = Wasi::new(&store, WasiCtx::new(std::env::args())?);
+            wasi.add_to_linker(&mut linker)?;
 
-            linker.func("std", "puts_int", |x: i32| { println!("{}", x); x})?;
-            linker.func("std", "print_int", |x: i32| { print!("{}", x); x})?;
+            linker.func("std", "puts_int", |x: i32| {
+                println!("{}", x);
+                x
+            })?;
+            linker.func("std", "print_int", |x: i32| {
+                print!("{}", x);
+                x
+            })?;
 
             let mut instances = vec![];
 
@@ -59,23 +64,24 @@ pub fn execute(string: &str) -> anyhow::Result<()> {
                         let wasm_module = Module::from_binary(&engine, binary.as_ref())?;
 
                         let instance = linker.instantiate(&wasm_module)?;
-                    
+
                         linker.instance(&name, &instance)?;
 
                         instances.push(instance);
-                    },
-                    instruction => ()
+                    }
+                    instruction => (),
                 }
             }
 
             if let Some(program) = instances.last() {
-                program.get_func("main")
+                program
+                    .get_func("main")
                     .ok_or(anyhow::format_err!("failed to find `main` function export"))?
-                    .call(&[])?; 
+                    .call(&[])?;
             }
 
             Ok(())
-        },
-        other => Ok(())
+        }
+        other => Ok(()),
     }
 }
