@@ -426,17 +426,41 @@ fn build_ast(
                 None
             };
 
-            Ok(Language::Conditional(kind, Box::new(instruction), block, block2))
-        },
+            Ok(Language::Conditional(
+                kind,
+                Box::new(instruction),
+                block,
+                block2,
+            ))
+        }
         Rule::assignation => {
             let mut inner = pair.into_inner();
 
-            let left = build_ast(inner.next().unwrap(), variables, modules)?;
+            let left_pair = inner.next().unwrap();
+
             let right = build_ast(inner.next().unwrap(), variables, modules)?;
 
-            Ok(Language::Infix(Operation::Assignment, Box::new(left), Box::new(right)))
-        },
-        x => panic!("WTF: {:?}", x)
+            let left = match left_pair.as_rule() {
+                Rule::variable_def => build_ast(left_pair, variables, modules)?,
+                Rule::variable => {
+                    let name = left_pair.as_str().to_string();
+
+                    Language::Variable(name, find_value_type(&right))
+                }
+                _ => panic!("Left part of assignation must be a variable"),
+            };
+
+            if let Language::Variable(name, types) = &left {
+                variables.insert(name.clone(), types.clone());
+            }
+
+            Ok(Language::Infix(
+                Operation::Assignment,
+                Box::new(left),
+                Box::new(right),
+            ))
+        }
+        x => panic!("No rule match: {:?}", x),
     }
 }
 
