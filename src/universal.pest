@@ -1,6 +1,7 @@
-language = _{ NEWLINE* ~ (module | expression | function_def) }
+language = _{ NEWLINE* ~ (module | expression ~(NEWLINE* ~ expression)* | function_def) }
 
-expression = { assignation | import | (boolean ~ (boolean_operator ~ boolean)*) }
+expression = { assignation | import | instruction }
+instruction = { (boolean ~ (boolean_operator ~ boolean)*) }
 boolean_operator = { "==" | "!=" | "<=" | ">=" | "<" | ">" | "min" | "max" }
 boolean = { summand ~ (summand_operator ~ summand)* }
 summand_operator = { "+" | "-" }
@@ -8,7 +9,7 @@ summand = { unary ~ (factor_operator ~ unary)*  }
 factor_operator = { "*" | "/" }
 unary = { (unary_operator ~ primary) | primary }
 unary_operator = { "!" | "-" }
-primary = { "(" ~ expression ~ ")" | endvalues }
+primary = { "(" ~ expression ~ ")" | array | array_access | endvalues }
 endvalues  = _{ symbol | float | integer | conditional | function_call | bool | variable }
 
 float = @{ integer ~ "." ~ integer }
@@ -16,6 +17,9 @@ float = @{ integer ~ "." ~ integer }
 bool = { thruty | falsey }
 thruty = { "true" }
 falsey = { "false" }
+
+array = { "[" ~ (instruction ~ ("," ~ instruction )*)? ~ "]" }
+array_access = ${ variable ~ "[" ~ integer ~ "]" }
 
 assignation = { (variable_def | variable) ~ "=" ~ expression }
 

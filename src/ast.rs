@@ -17,6 +17,7 @@ pub enum ValueType {
     Integer,
     Native(String),
     Symbol,
+    Array(Vec<ValueType>)
 }
 
 impl fmt::Display for ValueType {
@@ -27,6 +28,7 @@ impl fmt::Display for ValueType {
             ValueType::Integer => f.write_str("int"),
             ValueType::Native(native_type) => f.write_str(&native_type),
             ValueType::Symbol => f.write_str("symbol"),
+            ValueType::Array(value_type) => f.write_str("array"),
         }
     }
 }
@@ -99,26 +101,28 @@ pub enum Language {
     Program(Vec<Language>),
     Symbol(String),
     Variable(String, Vec<ValueType>),
+    Array(Vec<Language>),
+    ArrayAccess(String, usize)
 }
 
-pub fn find_value_type(node: &Language) -> Vec<ValueType> {
+pub fn find_value_type(node: &Language, variables: &Variables) -> Vec<ValueType> {
     match node {
         Language::Variable(_, value_type) => value_type.clone(),
         Language::Number(_) => vec![ValueType::Integer],
         Language::Float(_) => vec![ValueType::Float],
-        Language::Infix(_, _, right) => find_value_type(right),
+        Language::Infix(_, _, right) => find_value_type(right, variables),
         Language::Function(_, _, results, _, _) => results.clone(),
         Language::Call(_, _, value_type) => value_type.clone(),
         Language::Block(instructions) => {
             if let Some(instruction) = instructions.last() {
-                find_value_type(instruction)
+                find_value_type(instruction, variables)
             } else {
                 panic!("No instructions")
             }
         }
         Language::Module(_, _, instructions, _, _) => {
             if let Some(instruction) = instructions.last() {
-                find_value_type(instruction)
+                find_value_type(instruction, variables)
             } else {
                 panic!("No instructions")
             }
@@ -126,7 +130,7 @@ pub fn find_value_type(node: &Language) -> Vec<ValueType> {
         Language::Symbol(_) => vec![ValueType::Symbol],
         Language::Conditional(_, _, _, instructions) => {
             if let Some(instruction) = instructions {
-                find_value_type(instruction)
+                find_value_type(instruction, variables)
             } else {
                 panic!("No instructions")
             }
@@ -134,6 +138,32 @@ pub fn find_value_type(node: &Language) -> Vec<ValueType> {
         Language::Boolean(_) => vec![ValueType::Bool],
         Language::Import(_) => panic!("No value type for import"),
         Language::Program(_) => panic!("No value type for program"),
+        Language::Array(instructions) => {
+            let array_type = if let Some(instruction) = instructions.first() {
+                find_value_type(instruction, variables)
+            } else {
+                // Default array_type
+                vec![ValueType::Integer]
+            };
+            
+            vec![ValueType::Array(array_type)]
+        }
+        Language::ArrayAccess(name, _index) => {
+            if let Some(kinds) = &variables.get(name) {
+                kinds.into_iter()
+                    .map(|kind| {
+                        if let ValueType::Array(array_types) = kind {
+                            array_types.clone()
+                        } else {
+                            panic!("Variable {} is not an array", name)
+                        }
+                    })
+                .flatten()
+                .collect::<Vec<ValueType>>()
+            } else {
+                panic!("variable: ${} not found", name)
+            }
+        }
     }
 }
 
@@ -182,7 +212,7 @@ fn build_ast(
 
             let module = to_ast_from_file(path)?;
 
-            if let Language::Module(module_name, functions, _instructions, exports, _imports) =
+            if let Language::Module(_module_name, _functions, _instructions, exports, _imports) =
                 &module
             {
                 for export in exports {
@@ -231,10 +261,11 @@ fn build_ast(
 
             Ok(Language::Variable(name, vec![value_type]))
         }
-        Rule::unary => parse_expression(&mut pair.into_inner(), variables, modules),
-        Rule::boolean => parse_expression(&mut pair.into_inner(), variables, modules),
-        Rule::expression => parse_expression(&mut pair.into_inner(), variables, modules),
-        Rule::summand => parse_expression(&mut pair.into_inner(), variables, modules),
+        Rule::unary => parse_instruction(&mut pair.into_inner(), variables, modules),
+        Rule::boolean => parse_instruction(&mut pair.into_inner(), variables, modules),
+        Rule::expression => parse_instruction(&mut pair.into_inner(), variables, modules),
+        Rule::summand => parse_instruction(&mut pair.into_inner(), variables, modules),
+        Rule::instruction => parse_instruction(&mut pair.into_inner(), variables, modules),
         Rule::primary => {
             let mut inner = pair.into_inner();
 
@@ -343,7 +374,7 @@ fn build_ast(
 
             let param_types = params
                 .iter()
-                .map(|param| find_value_type(param))
+                .map(|param| find_value_type(param, variables))
                 .flatten()
                 .collect::<Vec<ValueType>>();
 
@@ -438,14 +469,14 @@ fn build_ast(
 
             let left_pair = inner.next().unwrap();
 
-            let right = build_ast(inner.next().unwrap(), variables, modules)?;
+            let mut right = build_ast(inner.next().unwrap(), variables, modules)?;
 
             let left = match left_pair.as_rule() {
                 Rule::variable_def => build_ast(left_pair, variables, modules)?,
                 Rule::variable => {
                     let name = left_pair.as_str().to_string();
 
-                    Language::Variable(name, find_value_type(&right))
+                    Language::Variable(name, find_value_type(&right, variables))
                 }
                 _ => panic!("Left part of assignation must be a variable"),
             };
@@ -459,6 +490,24 @@ fn build_ast(
                 Box::new(left),
                 Box::new(right),
             ))
+        }
+        Rule::array => {
+            let mut instructions = vec![];
+            let mut inner = pair.into_inner();
+
+            while let Some(instruction) = inner.next() {
+                instructions.push(build_ast(instruction, variables, modules)?);
+            }
+
+            Ok(Language::Array(instructions))
+        }
+        Rule::array_access => {
+            let mut inner = pair.into_inner();
+
+            let name = inner.next().unwrap().as_str();
+            let index = inner.next().unwrap().as_str();
+
+            Ok(Language::ArrayAccess(name.to_string(), index.parse().unwrap()))
         }
         x => panic!("No rule match: {:?}", x),
     }
@@ -482,12 +531,15 @@ pub fn to_ast(original: &str) -> Result<Language, Error<Rule>> {
         Ok(pairs) => {
             let mut pair = pairs.into_iter();
 
-            match pair.next() {
-                Some(pair) => match build_ast(pair, &mut variables, &mut modules) {
+            while let Some(inner_pair) = pair.next() {
+                match build_ast(inner_pair, &mut variables, &mut modules) {
                     Ok(ast) => block.push(ast),
-                    Err(e) => panic!(e),
-                },
-                None => (),
+                    Err(e) => {
+                        println!("{}", e);
+
+                        panic!(e)
+                    } 
+                }
             }
         }
         Err(e) => return Err(e),
@@ -508,7 +560,7 @@ pub fn to_ast_from_file(filepath: &str) -> Result<Language, Error<Rule>> {
     to_ast(&load_file(&filepath))
 }
 
-fn parse_expression(
+fn parse_instruction(
     inner: &mut Pairs<Rule>,
     variables: &mut Variables,
     modules: &mut Modules,
@@ -530,7 +582,7 @@ fn parse_expression(
                     Some(second_operator) => Ok(Language::Infix(
                         str_operator_to_enum(second_operator.as_str()),
                         Box::new(instruction),
-                        Box::new(parse_expression(inner, variables, modules)?),
+                        Box::new(parse_instruction(inner, variables, modules)?),
                     )),
                     None => Ok(instruction),
                 }
@@ -1103,5 +1155,53 @@ mod test {
         let expected = Program(vec![test_module, main_module]);
 
         assert_eq!(to_ast(program), Ok(expected));
+    }
+
+    #[test]
+    fn arrays() {
+        let program = "[]";
+        let expected = Array(vec![]);
+
+        assert_eq!(to_ast(program), Ok(expected));
+
+        let program = "a = []";
+        let array_type = ValueType::Array(vec![ValueType::Integer]);
+        let expected = Infix(
+            Operation::Assignment,
+            Box::new(Variable("a".to_string(), vec![array_type])),
+            Box::new(Array(vec![]))
+        );
+        
+        assert_eq!(to_ast(program), Ok(expected));
+
+        let program = "[1]";
+        let expected = Array(vec![Number(1)]);
+        
+        assert_eq!(to_ast(program), Ok(expected));
+
+        let program = "a = [1,2]";
+        let array_type = ValueType::Array(vec![ValueType::Integer]);
+        let expected = Infix(
+            Operation::Assignment,
+            Box::new(Variable("a".to_string(), vec![array_type])),
+            Box::new(Array(vec![Number(1), Number(2)]))
+        );
+        assert_eq!(to_ast(program), Ok(expected));
+
+        let program = "
+           a = [1]
+           a[0]
+        ";
+        let array_type = ValueType::Array(vec![ValueType::Integer]);
+        let expected = Block(vec![
+            Infix(
+                Operation::Assignment,
+                Box::new(Variable("a".to_string(), vec![array_type])),
+                Box::new(Array(vec![Number(1)]))
+            ),
+            ArrayAccess("a".to_string(), 0)
+        ]);
+        assert_eq!(to_ast(program), Ok(expected));
+
     }
 }

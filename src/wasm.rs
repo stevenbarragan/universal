@@ -31,7 +31,7 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
                 if let Language::Variable(name, value_type) = left.as_ref() {
                     data.variables.insert(name.to_string(), value_type.clone());
 
-                    return format!("(local.set ${} {})", name, to_wasm(right, data));
+                    return format!("{} (local.set ${})", to_wasm(right, data), name);
                 }
             }
 
@@ -59,7 +59,7 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
 
             format!(
                 "({}.{} {} {})",
-                value_types_to_wasm(&find_value_type(left)),
+                value_types_to_wasm(&find_value_type(left, &data.variables)),
                 method,
                 to_wasm(left, data),
                 to_wasm(right, data)
@@ -132,7 +132,7 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
 
             let param_types = params
                 .into_iter()
-                .map(|param| find_value_type(param))
+                .map(|param| find_value_type(param, &data.variables))
                 .flatten()
                 .collect::<Vec<ValueType>>();
 
@@ -208,7 +208,7 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
                 "".to_string()
             } else {
                 let value_types = match instructions.last() {
-                    Some(instruction) => find_value_type(instruction),
+                    Some(instruction) => find_value_type(instruction, &data.variables),
                     None => panic!("No instructions"),
                 };
 
@@ -231,11 +231,11 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
 
             let data_str = if data.memory.len() > 0 {
                 format!(
-                    "(memory (export \"mem\") 1) (data (i32.const 0) \"{}\")",
+                    "(import \"env\" \"memory\" (memory $env.memory 1)) (data (i32.const 0) \"{}\")",
                     data.memory
                 )
             } else {
-                "".to_string()
+                "(import \"env\" \"memory\" (memory $env.memory 1))".to_string()
             };
 
             let exports_str = exports
@@ -266,7 +266,7 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
                 ConditionalType::If => match block2 {
                     Some(x) => format!(
                         "(if (result {}) {} (then {}) (else {}))",
-                        value_types_to_wasm(&find_value_type(block)),
+                        value_types_to_wasm(&find_value_type(block, &data.variables)),
                         conditional_str,
                         block_str,
                         to_wasm(x, data)
@@ -276,7 +276,7 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
                 ConditionalType::Unless => match block2 {
                     Some(x) => format!(
                         "(if (result {}) (i32.eqz {}) (then {}) (else {}))",
-                        value_types_to_wasm(&find_value_type(block)),
+                        value_types_to_wasm(&find_value_type(block, &data.variables)),
                         conditional_str,
                         block_str,
                         to_wasm(x, data)
@@ -285,8 +285,72 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
                 },
             }
         }
+        Language::Array(instructions) => {
+            let name = new_variable_name(&data);
+
+            let instruction_size: usize = match instructions.first() {
+                Some(instruction) => {
+                    let value_type = find_value_type(&instruction, &data.variables);
+
+                    data.variables.insert(name.to_string(), vec![ValueType::Array(value_type.clone())]);
+
+                    size(&value_type)
+                },
+                None => {
+                    data.variables.insert(name.to_string(), vec![ValueType::Array(vec![ValueType::Integer])]);
+
+                    0
+                }
+            };
+
+            let mut result = format!("(local.tee ${} (call $calloc_int_int (i32.const {}) (i32.const {})))", name, instruction_size, instructions.len());
+
+            if instructions.len() > 0 {
+                result = format!("{} {}", result, instructions.into_iter().enumerate()
+                    .map(|(index, instruction)| format!("(local.get ${}) {} (i32.store offset={})", name, to_wasm(instruction, data), index * instruction_size)) 
+                    .collect::<Vec<String>>()
+                    .join(" "));
+            }
+
+            result.to_string()
+        }
+        Language::ArrayAccess(name, index) => {
+            if let Some(value_type) = data.variables.get(name) {
+                let offset = index * size(&value_type);
+
+                format!("(i32.load offset={} (local.get ${}))", offset, name)
+            } else {
+                panic!("Variable {} not found", name)
+            }
+        }
         Language::Program(_) => "".to_string(),
     }
+}
+
+fn new_variable_name(data: &Data) -> String {
+    let mut index = 0;
+    let mut new_name = format!("l{}", &index);
+
+    while data.variables.contains_key(&new_name) {
+        index += 1;
+
+        new_name = format!("l{}", index);
+    }
+
+    new_name
+}
+
+fn size(value_types: &Vec<ValueType>) -> usize {
+    value_types.into_iter()
+        .map(|value_type| match value_type {
+            ValueType::Bool => 1,
+            ValueType::Float => 1,
+            ValueType::Integer => 4,
+            ValueType::Native(name) => 1, // fix me!
+            ValueType::Symbol => 8,
+            ValueType::Array(_) => 4
+        })
+        .sum()
 }
 
 fn value_types_to_wasm(value_types: &Vec<ValueType>) -> String {
@@ -294,7 +358,7 @@ fn value_types_to_wasm(value_types: &Vec<ValueType>) -> String {
         .iter()
         .map(|value_type: &ValueType| value_type_to_wasm(value_type))
         .collect::<Vec<String>>()
-        .join(", ")
+        .join(" ")
 }
 
 fn value_type_to_wasm(value_type: &ValueType) -> String {
@@ -304,6 +368,7 @@ fn value_type_to_wasm(value_type: &ValueType) -> String {
         ValueType::Symbol => "i32 i32".to_string(),
         ValueType::Bool => "i32".to_string(),
         ValueType::Native(name) => name.to_string(),
+        ValueType::Array(_value_type) => "i32".to_string()
     }
 }
 
@@ -340,7 +405,7 @@ mod test {
             Ok(function) => {
                 assert_eq!(
                     to_wasm(&function, &mut data),
-                    "(func $tres (result i32) (local $num i32) (local.set $num (i32.const 3)))"
+                    "(func $tres (result i32) (local $num i32) (i32.const 3) (local.set $num))"
                 );
             }
             Err(e) => println!("{}", e),
@@ -356,7 +421,7 @@ mod test {
         match function_ast {
             Ok(function) => {
                 assert_eq!(to_wasm(&function, &mut data),
-                    "(func $tres_int (param $x i32) (result i32) (local $num i32) (local.set $num (i32.const 3)) (i32.add (local.get $x) (local.get $num)))");
+                    "(func $tres_int (param $x i32) (result i32) (local $num i32) (i32.const 3) (local.set $num) (i32.add (local.get $x) (local.get $num)))");
             }
             Err(e) => println!("{}", e),
         }
@@ -373,7 +438,7 @@ mod test {
 
         assert_eq!(
             to_wasm(&assignation, &mut data),
-            "(local.set $x (i32.const 1))"
+            "(i32.const 1) (local.set $x)"
         )
     }
 
@@ -406,7 +471,7 @@ mod test {
             imports,
         );
 
-        let expected = "(module $awesome (func $tres (result i32) (i32.const 3)) (func $main (result i32) (i32.const 42)) (export \"tres\" (func $tres)) (export \"main\" (func $main)))";
+        let expected = "(module $awesome (import \"env\" \"memory\" (memory $env.memory 1)) (func $tres (result i32) (i32.const 3)) (func $main (result i32) (i32.const 42)) (export \"tres\" (func $tres)) (export \"main\" (func $main)))";
 
         assert_eq!(to_wasm(&module, &mut data), expected);
     }
@@ -425,7 +490,7 @@ mod test {
             imports,
         );
 
-        let expected = "(module $awesome (memory (export \"mem\") 1) (data (i32.const 0) \"42\") (func $main (result i32 i32) (i32.const 0) (i32.const 2)) (export \"main\" (func $main)))";
+        let expected = "(module $awesome (import \"env\" \"memory\" (memory $env.memory 1)) (data (i32.const 0) \"42\") (func $main (result i32 i32) (i32.const 0) (i32.const 2)) (export \"main\" (func $main)))";
 
         assert_eq!(to_wasm(&module, &mut data), expected);
 
@@ -441,7 +506,7 @@ mod test {
             imports,
         );
 
-        let expected = "(module $awesome (memory (export \"mem\") 1) (data (i32.const 0) \"4243\") (func $main (result i32 i32) (i32.const 0) (i32.const 2) (i32.const 2) (i32.const 2)) (export \"main\" (func $main)))";
+        let expected = "(module $awesome (import \"env\" \"memory\" (memory $env.memory 1)) (data (i32.const 0) \"4243\") (func $main (result i32 i32) (i32.const 0) (i32.const 2) (i32.const 2) (i32.const 2)) (export \"main\" (func $main)))";
 
         assert_eq!(to_wasm(&module, &mut data), expected)
     }
@@ -523,6 +588,41 @@ mod test {
 
         let expected = "(f32.const 2.23)";
 
+        assert_eq!(to_wasm(&instruction, &mut data), expected);
+    }
+
+    #[test]
+    fn arrays() {
+        let mut data: Data = Default::default();
+
+        let instruction = Array(vec![]);
+        let expected = "(local.tee $l0 (call $calloc_int_int (i32.const 0) (i32.const 0)))";
+        
+        assert_eq!(to_wasm(&instruction, &mut data), expected);
+
+        let mut data: Data = Default::default();
+        let array_type = ValueType::Array(vec![ValueType::Integer]);
+        let instruction = Array(vec![Number(42)]);
+
+        let expected = "(local.tee $l0 (call $calloc_int_int (i32.const 4) (i32.const 1))) (local.get $l0) (i32.const 42) (i32.store offset=0)";
+        
+        assert_eq!(to_wasm(&instruction, &mut data), expected);
+
+        let mut data: Data = Default::default();
+        let array_type = ValueType::Array(vec![ValueType::Integer]);
+        let instruction = Infix(
+            Operation::Assignment,
+            Box::new(Variable("a".to_string(), vec![array_type])),
+            Box::new(Array(vec![Number(42)]))
+        );
+
+        let expected = "(local.tee $l0 (call $calloc_int_int (i32.const 4) (i32.const 1))) (local.get $l0) (i32.const 42) (i32.store offset=0) (local.set $a)";
+        
+        assert_eq!(to_wasm(&instruction, &mut data), expected);
+
+        let instruction = ArrayAccess("a".to_string(), 0);
+        let expected = "(i32.load offset=0 (local.get $a))";
+        
         assert_eq!(to_wasm(&instruction, &mut data), expected);
     }
 }
