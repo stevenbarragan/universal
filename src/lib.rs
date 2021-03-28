@@ -69,10 +69,6 @@ pub fn execute(string: &str) -> anyhow::Result<()> {
                 x
             })?;
 
-            linker.func("std", "calloc_int_int", |x: i32, y: i32| {
-                0
-            })?;
-
             let mut instances = vec![];
 
             for module in modules {

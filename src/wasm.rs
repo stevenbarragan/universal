@@ -303,7 +303,7 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
                 }
             };
 
-            let mut result = format!("(local.tee ${} (call $calloc_int_int (i32.const {}) (i32.const {})))", name, instruction_size, instructions.len());
+            let mut result = format!("(local.tee ${} (memory.grow (i32.const {})))", name, instruction_size * instructions.len());
 
             if instructions.len() > 0 {
                 result = format!("{} {}", result, instructions.into_iter().enumerate()
@@ -596,7 +596,7 @@ mod test {
         let mut data: Data = Default::default();
 
         let instruction = Array(vec![]);
-        let expected = "(local.tee $l0 (call $calloc_int_int (i32.const 0) (i32.const 0)))";
+        let expected = "(local.tee $l0 (memory.grow (i32.const 0)))";
         
         assert_eq!(to_wasm(&instruction, &mut data), expected);
 
@@ -604,7 +604,7 @@ mod test {
         let array_type = ValueType::Array(vec![ValueType::Integer]);
         let instruction = Array(vec![Number(42)]);
 
-        let expected = "(local.tee $l0 (call $calloc_int_int (i32.const 4) (i32.const 1))) (local.get $l0) (i32.const 42) (i32.store offset=0)";
+        let expected = "(local.tee $l0 (memory.grow (i32.const 4))) (local.get $l0) (i32.const 42) (i32.store offset=0)";
         
         assert_eq!(to_wasm(&instruction, &mut data), expected);
 
@@ -616,7 +616,7 @@ mod test {
             Box::new(Array(vec![Number(42)]))
         );
 
-        let expected = "(local.tee $l0 (call $calloc_int_int (i32.const 4) (i32.const 1))) (local.get $l0) (i32.const 42) (i32.store offset=0) (local.set $a)";
+        let expected = "(local.tee $l0 (memory.grow (i32.const 4))) (local.get $l0) (i32.const 42) (i32.store offset=0) (local.set $a)";
         
         assert_eq!(to_wasm(&instruction, &mut data), expected);
 
