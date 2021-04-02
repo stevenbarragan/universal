@@ -5,7 +5,7 @@ use std::collections::HashMap;
 pub struct Data {
     pointers: HashMap<String, (usize, usize)>,
     memory: String,
-    variables: Variables,
+    variables: Context,
     modules: HashMap<String, Language>,
 }
 
@@ -29,7 +29,7 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
         Language::Infix(operation, left, right) => {
             if &Operation::Assignment == operation {
                 if let Language::Variable(name, value_type) = left.as_ref() {
-                    data.variables.insert(name.to_string(), value_type.clone());
+                    data.variables.add(name.to_string(), value_type.clone());
 
                     return format!("{} (local.set ${})", to_wasm(right, data), name);
                 }
@@ -80,18 +80,17 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
                 .collect::<Vec<String>>()
                 .join(" ");
 
+            data.variables.add_new_scope();
+
             let instructions = block
                 .into_iter()
                 .map(|language| to_wasm(language, data))
                 .collect::<Vec<String>>()
                 .join(" ");
 
-            let locals = data
-                .variables
+            let locals =  data.variables.local_variables()
                 .iter()
-                .map(|(name, value_type)| {
-                    format!("(local ${} {})", name, value_types_to_wasm(&value_type))
-                })
+                .map(|(name, value_type)| format!("(local ${} {})", name, value_types_to_wasm(&value_type)))
                 .collect::<Vec<String>>()
                 .join(" ");
 
@@ -108,6 +107,8 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
 
             let name_key = build_function_key(&name, &params);
 
+            data.variables.pop();
+            
             format!("(func ${} {})", name_key, body)
         }
         Language::Symbol(string) => {
@@ -292,12 +293,12 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
                 Some(instruction) => {
                     let value_type = find_value_type(&instruction, &data.variables);
 
-                    data.variables.insert(name.to_string(), vec![ValueType::Array(value_type.clone())]);
+                    data.variables.add(name.to_string(), vec![ValueType::Array(value_type.clone())]);
 
                     size(&value_type)
                 },
                 None => {
-                    data.variables.insert(name.to_string(), vec![ValueType::Array(vec![ValueType::Integer])]);
+                    data.variables.add(name.to_string(), vec![ValueType::Array(vec![ValueType::Integer])]);
 
                     0
                 }
@@ -315,7 +316,7 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
             result.to_string()
         }
         Language::ArrayAccess(name, index) => {
-            if let Some(value_type) = data.variables.get(name) {
+            if let Some(value_type) = data.variables.find(name) {
                 let offset = index * size(&value_type);
 
                 format!("(i32.load offset={} (local.get ${}))", offset, name)
@@ -422,6 +423,31 @@ mod test {
             Ok(function) => {
                 assert_eq!(to_wasm(&function, &mut data),
                     "(func $tres_int (param $x i32) (result i32) (local $num i32) (i32.const 3) (local.set $num) (i32.add (local.get $x) (local.get $num)))");
+            }
+            Err(e) => println!("{}", e),
+        }
+
+        let mut data: Data = Default::default();
+
+        let functions_ast = to_ast(
+            "module test
+                fn tres(): Int
+                  var1 = 3
+                  var1
+                end
+
+                fn dos(): Int
+                  var2 = 2
+                  var2
+                end
+            end
+            ",
+        );
+
+        match functions_ast {
+            Ok(function) => {
+                assert_eq!(to_wasm(&function, &mut data),
+                    "(module $test (import \"env\" \"memory\" (memory $env.memory 1)) (func $tres (result i32) (local $var1 i32) (i32.const 3) (local.set $var1) (local.get $var1)) (func $dos (result i32) (local $var2 i32) (i32.const 2) (local.set $var2) (local.get $var2)))");
             }
             Err(e) => println!("{}", e),
         }

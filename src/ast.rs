@@ -37,7 +37,69 @@ pub type Block = Vec<Language>;
 pub type Modules = Vec<Language>;
 pub type Params = Vec<(String, ValueType)>;
 pub type Results = Vec<ValueType>;
+
 pub type Variables = HashMap<String, Vec<ValueType>>;
+
+pub type Context = Vec<Variables>;
+
+pub trait ContextManagment {
+    fn start() -> Self;
+    fn add(&mut self, key: String, value: Vec<ValueType>);
+    fn find(&self, key: &String) -> Option<Vec<ValueType>>;
+    fn contains_key(&self, key: &String) -> bool;
+    fn add_new_scope(&mut self);
+    fn local_variables(&self) -> Variables;
+}
+
+impl ContextManagment for Context {
+    fn start() -> Self {
+        vec![Variables::new()]
+    }
+
+    fn add(&mut self, key: String, value: Vec<ValueType>) {
+        if let Some(scope) = self.last_mut() {
+            scope.insert(key, value);
+        } else {
+            let mut new_scope = Variables::new();
+
+            new_scope.insert(key, value);
+
+            self.push(new_scope);
+        }
+    }
+
+    fn add_new_scope(&mut self) {
+        self.push(Variables::new());
+    }
+
+    fn find(&self, key: &String) -> Option<Vec<ValueType>> {
+        for variables in self.iter().rev() {
+            if let Some(value) = variables.get(key) {
+                return Some(value.clone())
+            }
+        }
+
+        None
+    }
+
+    fn contains_key(&self, key: &String) -> bool {
+        for variables in self.into_iter() {
+            if variables.contains_key(key) {
+                return true
+            }
+        }
+
+        false
+    }
+
+    fn local_variables(&self) -> Variables {
+        if let Some(variables) = self.last() {
+            variables.clone()
+        } else {
+            Variables::new()
+        }
+    }
+}
 
 #[derive(Debug, PartialEq, Clone, Hash, Eq)]
 pub enum Operation {
@@ -105,24 +167,24 @@ pub enum Language {
     ArrayAccess(String, usize)
 }
 
-pub fn find_value_type(node: &Language, variables: &Variables) -> Vec<ValueType> {
+pub fn find_value_type(node: &Language, scope: &Context) -> Vec<ValueType> {
     match node {
         Language::Variable(_, value_type) => value_type.clone(),
         Language::Number(_) => vec![ValueType::Integer],
         Language::Float(_) => vec![ValueType::Float],
-        Language::Infix(_, _, right) => find_value_type(right, variables),
+        Language::Infix(_, _, right) => find_value_type(right, scope),
         Language::Function(_, _, results, _, _) => results.clone(),
         Language::Call(_, _, value_type) => value_type.clone(),
         Language::Block(instructions) => {
             if let Some(instruction) = instructions.last() {
-                find_value_type(instruction, variables)
+                find_value_type(instruction, scope)
             } else {
                 panic!("No instructions")
             }
         }
         Language::Module(_, _, instructions, _, _) => {
             if let Some(instruction) = instructions.last() {
-                find_value_type(instruction, variables)
+                find_value_type(instruction, scope)
             } else {
                 panic!("No instructions")
             }
@@ -130,7 +192,7 @@ pub fn find_value_type(node: &Language, variables: &Variables) -> Vec<ValueType>
         Language::Symbol(_) => vec![ValueType::Symbol],
         Language::Conditional(_, _, _, instructions) => {
             if let Some(instruction) = instructions {
-                find_value_type(instruction, variables)
+                find_value_type(instruction, scope)
             } else {
                 panic!("No instructions")
             }
@@ -140,16 +202,16 @@ pub fn find_value_type(node: &Language, variables: &Variables) -> Vec<ValueType>
         Language::Program(_) => panic!("No value type for program"),
         Language::Array(instructions) => {
             let array_type = if let Some(instruction) = instructions.first() {
-                find_value_type(instruction, variables)
+                find_value_type(instruction, scope)
             } else {
                 // Default array_type
                 vec![ValueType::Integer]
             };
-            
+
             vec![ValueType::Array(array_type)]
         }
         Language::ArrayAccess(name, _index) => {
-            if let Some(kinds) = &variables.get(name) {
+            if let Some(kinds) = scope.find(name) {
                 kinds.into_iter()
                     .map(|kind| {
                         if let ValueType::Array(array_types) = kind {
@@ -192,7 +254,7 @@ pub fn function_key(function_name: &str, value_types: &Vec<ValueType>) -> String
 
 fn build_ast(
     pair: Pair<Rule>,
-    variables: &mut Variables,
+    scope: &mut Context,
     modules: &mut Modules,
 ) -> Result<Language, Error<Rule>> {
     match pair.as_rule() {
@@ -220,7 +282,7 @@ fn build_ast(
                         Export::Function(function_name, params, returns) => {
                             let name_key = build_function_key(&function_name, &params);
 
-                            variables.insert(format!("{}", name_key), returns.clone());
+                            scope.add(format!("{}", name_key), returns.clone());
                         }
                     }
                 }
@@ -243,7 +305,7 @@ fn build_ast(
         Rule::variable => {
             let name = pair.as_str().to_string();
 
-            if let Some(kind) = variables.get(&name) {
+            if let Some(kind) = scope.find(&name) {
                 Ok(Language::Variable(name, kind.clone()))
             } else {
                 panic!("variable: ${} not found", name)
@@ -257,25 +319,27 @@ fn build_ast(
 
             let value_type = str_to_value_type(kind);
 
-            variables.insert(name.to_string(), vec![value_type.clone()]);
+            scope.add(name.to_string(), vec![value_type.clone()]);
 
             Ok(Language::Variable(name, vec![value_type]))
         }
-        Rule::unary => parse_instruction(&mut pair.into_inner(), variables, modules),
-        Rule::boolean => parse_instruction(&mut pair.into_inner(), variables, modules),
-        Rule::expression => parse_instruction(&mut pair.into_inner(), variables, modules),
-        Rule::summand => parse_instruction(&mut pair.into_inner(), variables, modules),
-        Rule::instruction => parse_instruction(&mut pair.into_inner(), variables, modules),
+        Rule::unary => parse_instruction(&mut pair.into_inner(), scope, modules),
+        Rule::boolean => parse_instruction(&mut pair.into_inner(), scope, modules),
+        Rule::expression => parse_instruction(&mut pair.into_inner(), scope, modules),
+        Rule::summand => parse_instruction(&mut pair.into_inner(), scope, modules),
+        Rule::instruction => parse_instruction(&mut pair.into_inner(), scope, modules),
         Rule::primary => {
             let mut inner = pair.into_inner();
 
-            build_ast(inner.next().unwrap(), variables, modules)
+            build_ast(inner.next().unwrap(), scope, modules)
         }
         Rule::function_def => {
             let mut visibility = Visiblitity::Private;
             let mut results = vec![];
             let mut params = vec![];
             let mut instructions = vec![];
+
+            scope.add_new_scope();
 
             let mut inner = pair.into_inner();
 
@@ -309,7 +373,7 @@ fn build_ast(
 
                     params.push((name.to_string(), kind.clone()));
 
-                    variables.insert(name.to_string(), vec![kind]);
+                    scope.add(name.to_string(), vec![kind]);
                 }
 
                 elem = inner.next().unwrap();
@@ -324,10 +388,6 @@ fn build_ast(
                     results.push(kind);
                 }
 
-                let name_key = build_function_key(&function_name, &params);
-
-                variables.insert(name_key, results.clone());
-
                 elem = inner.next().unwrap();
             }
 
@@ -335,9 +395,15 @@ fn build_ast(
                 let mut pair = elem.into_inner();
 
                 while let Some(instruction) = pair.next() {
-                    instructions.push(build_ast(instruction, variables, modules)?);
+                    instructions.push(build_ast(instruction, scope, modules)?);
                 }
             }
+
+            scope.pop();
+
+            // function get's added on it's parent scope
+            let name_key = build_function_key(&function_name, &params);
+            scope.add(name_key, results.clone());
 
             Ok(Language::Function(
                 function_name,
@@ -350,10 +416,13 @@ fn build_ast(
         Rule::block => {
             let mut instructions = vec![];
             let mut inner = pair.into_inner();
+            scope.add_new_scope();
 
             while let Some(instruction) = inner.next() {
-                instructions.push(build_ast(instruction, variables, modules)?);
+                instructions.push(build_ast(instruction, scope, modules)?);
             }
+
+            scope.pop();
 
             Ok(Language::Block(instructions))
         }
@@ -368,22 +437,22 @@ fn build_ast(
                 let mut params_inner = pair_params.into_inner();
 
                 while let Some(param) = params_inner.next() {
-                    params.push(build_ast(param, variables, modules)?);
+                    params.push(build_ast(param, scope, modules)?);
                 }
             }
 
             let param_types = params
                 .iter()
-                .map(|param| find_value_type(param, variables))
+                .map(|param| find_value_type(param, scope))
                 .flatten()
                 .collect::<Vec<ValueType>>();
 
             let name_key = function_key(&function_name, &param_types);
 
-            if let Some(value_type) = variables.get(&name_key) {
+            if let Some(value_type) = scope.find(&name_key) {
                 Ok(Language::Call(function_name, params, value_type.clone()))
             } else {
-                println!("variables: {:?}", variables);
+                println!("variables: {:?}", scope);
                 println!("modules: {:?}", modules);
 
                 panic!("No variable found {}", name_key)
@@ -404,7 +473,7 @@ fn build_ast(
             let mut pair = block.into_inner();
 
             while let Some(instruction) = pair.next() {
-                let ast = build_ast(instruction, variables, modules)?;
+                let ast = build_ast(instruction, scope, modules)?;
 
                 match &ast {
                     Language::Function(name, params, returns, _, visibility) => {
@@ -448,11 +517,11 @@ fn build_ast(
                 x => panic!("{} not supported", x),
             };
 
-            let instruction = build_ast(inner.next().unwrap(), variables, modules)?;
-            let block = Box::new(build_ast(inner.next().unwrap(), variables, modules)?);
+            let instruction = build_ast(inner.next().unwrap(), scope, modules)?;
+            let block = Box::new(build_ast(inner.next().unwrap(), scope, modules)?);
 
             let block2 = if let Some(else_block) = inner.next() {
-                Some(Box::new(build_ast(else_block, variables, modules)?))
+                Some(Box::new(build_ast(else_block, scope, modules)?))
             } else {
                 None
             };
@@ -469,20 +538,20 @@ fn build_ast(
 
             let left_pair = inner.next().unwrap();
 
-            let mut right = build_ast(inner.next().unwrap(), variables, modules)?;
+            let right = build_ast(inner.next().unwrap(), scope, modules)?;
 
             let left = match left_pair.as_rule() {
-                Rule::variable_def => build_ast(left_pair, variables, modules)?,
+                Rule::variable_def => build_ast(left_pair, scope, modules)?,
                 Rule::variable => {
                     let name = left_pair.as_str().to_string();
 
-                    Language::Variable(name, find_value_type(&right, variables))
+                    Language::Variable(name, find_value_type(&right, scope))
                 }
                 _ => panic!("Left part of assignation must be a variable"),
             };
 
             if let Language::Variable(name, types) = &left {
-                variables.insert(name.clone(), types.clone());
+                scope.add(name.clone(), types.clone());
             }
 
             Ok(Language::Infix(
@@ -496,7 +565,7 @@ fn build_ast(
             let mut inner = pair.into_inner();
 
             while let Some(instruction) = inner.next() {
-                instructions.push(build_ast(instruction, variables, modules)?);
+                instructions.push(build_ast(instruction, scope, modules)?);
             }
 
             Ok(Language::Array(instructions))
@@ -526,19 +595,20 @@ pub fn to_ast(original: &str) -> Result<Language, Error<Rule>> {
     let mut block = vec![];
     let mut modules = vec![];
     let mut variables = Variables::new();
+    let mut scope = Context::start();
 
     match UniversalParser::parse(Rule::language, original) {
         Ok(pairs) => {
             let mut pair = pairs.into_iter();
 
             while let Some(inner_pair) = pair.next() {
-                match build_ast(inner_pair, &mut variables, &mut modules) {
+                match build_ast(inner_pair, &mut scope, &mut modules) {
                     Ok(ast) => block.push(ast),
                     Err(e) => {
                         println!("{}", e);
 
                         panic!(e)
-                    } 
+                    }
                 }
             }
         }
@@ -562,15 +632,15 @@ pub fn to_ast_from_file(filepath: &str) -> Result<Language, Error<Rule>> {
 
 fn parse_instruction(
     inner: &mut Pairs<Rule>,
-    variables: &mut Variables,
+    scope: &mut Context,
     modules: &mut Modules,
 ) -> Result<Language, Error<Rule>> {
-    let summand = build_ast(inner.next().unwrap(), variables, modules)?;
+    let summand = build_ast(inner.next().unwrap(), scope, modules)?;
 
     match inner.next() {
         Some(operator) => match inner.next() {
             Some(pair) => {
-                let summand2 = build_ast(pair, variables, modules)?;
+                let summand2 = build_ast(pair, scope, modules)?;
 
                 let instruction = Language::Infix(
                     str_operator_to_enum(operator.as_str()),
@@ -582,7 +652,7 @@ fn parse_instruction(
                     Some(second_operator) => Ok(Language::Infix(
                         str_operator_to_enum(second_operator.as_str()),
                         Box::new(instruction),
-                        Box::new(parse_instruction(inner, variables, modules)?),
+                        Box::new(parse_instruction(inner, scope, modules)?),
                     )),
                     None => Ok(instruction),
                 }
@@ -1171,12 +1241,12 @@ mod test {
             Box::new(Variable("a".to_string(), vec![array_type])),
             Box::new(Array(vec![]))
         );
-        
+
         assert_eq!(to_ast(program), Ok(expected));
 
         let program = "[1]";
         let expected = Array(vec![Number(1)]);
-        
+
         assert_eq!(to_ast(program), Ok(expected));
 
         let program = "a = [1,2]";
