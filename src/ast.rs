@@ -28,7 +28,7 @@ impl fmt::Display for ValueType {
             ValueType::Integer => f.write_str("int"),
             ValueType::Native(native_type) => f.write_str(&native_type),
             ValueType::Symbol => f.write_str("symbol"),
-            ValueType::Array(value_type) => f.write_str("array"),
+            ValueType::Array(_value_type) => f.write_str("array"),
         }
     }
 }
@@ -594,7 +594,6 @@ fn str_to_value_type(value_type: &str) -> ValueType {
 pub fn to_ast(original: &str) -> Result<Language, Error<Rule>> {
     let mut block = vec![];
     let mut modules = vec![];
-    let mut variables = Variables::new();
     let mut scope = Context::start();
 
     match UniversalParser::parse(Rule::language, original) {

@@ -2,19 +2,15 @@ pub mod ast;
 pub mod compiler;
 pub mod wasm;
 
-use std::fs;
-use std::path::Path;
 use std::str;
 use wat;
 
-use anyhow::Result;
 use wasmtime::*;
 use wasmtime_wasi::{Wasi};
 use wasi_cap_std_sync::WasiCtxBuilder;
 
-use compiler::compile;
-
 extern crate pest;
+
 #[macro_use]
 extern crate pest_derive;
 
@@ -91,7 +87,7 @@ pub fn execute(string: &str) -> anyhow::Result<()> {
 
                         instances.push(instance);
                     }
-                    instruction => (),
+                    _instruction => (),
                 }
             }
 
@@ -104,6 +100,6 @@ pub fn execute(string: &str) -> anyhow::Result<()> {
 
             Ok(())
         }
-        other => Ok(()),
+        _other => Ok(()),
     }
 }

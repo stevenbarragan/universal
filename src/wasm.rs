@@ -157,7 +157,7 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
                     let module = data.modules.get(import_name).unwrap();
 
                     match module {
-                        Language::Module(name, functions, instructions, exports, _imports) => {
+                        Language::Module(_name, _functions, _instructions, exports, _imports) => {
                             exports
                                 .into_iter()
                                 .map(|export| match export {
@@ -188,7 +188,6 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
                                             results_str
                                         )
                                     }
-                                    _ => unreachable!(),
                                 })
                                 .collect::<Vec<String>>()
                                 .join(" ")
@@ -347,7 +346,7 @@ fn size(value_types: &Vec<ValueType>) -> usize {
             ValueType::Bool => 1,
             ValueType::Float => 1,
             ValueType::Integer => 4,
-            ValueType::Native(name) => 1, // fix me!
+            ValueType::Native(_name) => 1, // fix me!
             ValueType::Symbol => 8,
             ValueType::Array(_) => 4
         })
@@ -627,7 +626,6 @@ mod test {
         assert_eq!(to_wasm(&instruction, &mut data), expected);
 
         let mut data: Data = Default::default();
-        let array_type = ValueType::Array(vec![ValueType::Integer]);
         let instruction = Array(vec![Number(42)]);
 
         let expected = "(local.tee $l0 (memory.grow (i32.const 4))) (local.get $l0) (i32.const 42) (i32.store offset=0)";

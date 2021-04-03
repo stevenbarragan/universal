@@ -1,7 +1,6 @@
-use std::collections::HashMap;
 use std::fs;
 
-use crate::ast::{to_ast, Context, ContextManagment};
+use crate::ast::{to_ast};
 use crate::wasm::{to_wasm, Data};
 
 pub fn compile(string: &str) -> anyhow::Result<String> {
