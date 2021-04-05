@@ -331,6 +331,25 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
 
             format!("(i32.load offset={} (local.get ${}))", offset, callee)
         }
+        Language::TypeCall(callee, message, parameters) => {
+            let mut params_str = format!("(local.get ${}) ", callee);
+
+            params_str += &parameters
+                .into_iter()
+                .map(|language| to_wasm(language, data))
+                .collect::<Vec<String>>()
+                .join(" ");
+
+            let param_types = parameters
+                .into_iter()
+                .map(|param| find_value_type(param, &data.variables))
+                .flatten()
+                .collect::<Vec<ValueType>>();
+
+            let name_key = function_key(&message, &param_types);
+
+            format!("(call {}_${} {})", callee, name_key, params_str)
+        }
     }
 }
 

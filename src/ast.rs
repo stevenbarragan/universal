@@ -43,17 +43,20 @@ pub type Params = Vec<(String, ValueType)>;
 pub type Results = Vec<ValueType>;
 
 pub type Variables = HashMap<String, Vec<ValueType>>;
+pub type Methods = HashMap<String, Vec<ValueType>>;
 
 pub struct Context {
     variables: Vec<Variables>,
-    types: HashMap<Name, TypeAttributes>
+    types_attributes: HashMap<Name, Attributes>,
+    types_methods: HashMap<Name, Methods>
 }
 
 impl Default for Context {
     fn default() -> Self {
         Context {
             variables: vec![Variables::new()],
-            types: HashMap::new()
+            types_attributes: HashMap::new(),
+            types_methods: HashMap::new()
         }
     }
 }
@@ -108,13 +111,19 @@ impl Context {
     }
 
     fn find_type_attribute_type(&self, kind: &String, attribute: &String) -> ValueType {
-       let attributes = self.types.get(kind).expect("custom type not found");
+       let attributes = self.types_attributes.get(kind).expect("custom type not found");
 
        attributes.get(attribute).expect("Custom type attribute not found").clone()
     }
 
+    fn find_type_method_type(&self, kind: &String, message: &String) -> Vec<ValueType> {
+       let method = self.types_methods.get(kind).expect("custom type not found");
+
+       method.get(message).expect("Custom type method not found").clone()
+    }
+
     pub fn calculate_memory_offset(&self, kind: &String, attribute: &String) -> usize {
-       let attributes = self.types.get(kind).expect("custom type not found");
+       let attributes = self.types_attributes.get(kind).expect("custom type not found");
 
        let mut value_types = vec![];
 
@@ -122,11 +131,11 @@ impl Context {
            if name == attribute {
                break;
            } else {
-               value_types.push(value_type)
+               value_types.push(value_type.clone())
            }
        }
 
-       size(value_types)
+       size(&value_types)
     }
 }
 
@@ -175,14 +184,16 @@ pub enum Visiblitity {
 pub type Name = String;
 pub type Callee = String;
 pub type Message = String;
-pub type TypeAttributes = HashMap<Name, ValueType>;
+pub type Attributes = HashMap<Name, ValueType>;
 pub type NamedTypes = Vec<Name>;
+pub type Parameters = Vec<Language>;
+pub type Functions = Vec<Language>;
 
 #[derive(Debug, PartialEq, Clone, Eq)]
 pub enum Language {
     Block(Block),
     Boolean(bool),
-    Call(String, Block, Results),
+    Call(String, Parameters, Results),
     Conditional(
         ConditionalType,
         Box<Language>,
@@ -197,8 +208,9 @@ pub enum Language {
     Number(i64),
     Program(Vec<Language>),
     Symbol(String),
-    CustomType(Name, NamedTypes, TypeAttributes, Vec<Language>),
+    CustomType(Name, NamedTypes, Attributes, Functions),
     TypeAttributeAccess(Callee, Message),
+    TypeCall(Callee, Message, Parameters),
     Variable(String, Vec<ValueType>),
     Array(Vec<Language>),
     ArrayAccess(String, usize)
@@ -270,6 +282,9 @@ pub fn find_value_type(node: &Language, scope: &Context) -> Vec<ValueType> {
         }
         Language::TypeAttributeAccess(callee, message) => {
             vec![scope.find_type_attribute_type(callee, message)]
+        }
+        Language::TypeCall(callee, message, _parameters) => {
+            scope.find_type_method_type(callee, message)
         }
     }
 }
