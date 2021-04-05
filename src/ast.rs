@@ -17,7 +17,8 @@ pub enum ValueType {
     Integer,
     Native(String),
     Symbol,
-    Array(Vec<ValueType>)
+    Array(Vec<ValueType>),
+    CustomType(Vec<ValueType>)
 }
 
 impl fmt::Display for ValueType {
@@ -29,6 +30,7 @@ impl fmt::Display for ValueType {
             ValueType::Native(native_type) => f.write_str(&native_type),
             ValueType::Symbol => f.write_str("symbol"),
             ValueType::Array(_value_type) => f.write_str("array"),
+            ValueType::CustomType(_) => f.write_str("type"),
         }
     }
 }
@@ -143,7 +145,11 @@ pub enum Visiblitity {
     Private,
 }
 
-#[derive(Debug, PartialEq, Clone, Hash, Eq)]
+pub type Name = String;
+pub type TypeAttributes = HashMap<Name, ValueType>;
+pub type NamedTypes = Vec<Name>;
+
+#[derive(Debug, PartialEq, Clone, Eq)]
 pub enum Language {
     Block(Block),
     Boolean(bool),
@@ -162,6 +168,7 @@ pub enum Language {
     Number(i64),
     Program(Vec<Language>),
     Symbol(String),
+    CustomType(Name, NamedTypes, TypeAttributes, Vec<Language>),
     Variable(String, Vec<ValueType>),
     Array(Vec<Language>),
     ArrayAccess(String, usize)
@@ -225,6 +232,11 @@ pub fn find_value_type(node: &Language, scope: &Context) -> Vec<ValueType> {
             } else {
                 panic!("variable: ${} not found", name)
             }
+        }
+        Language::CustomType(_name, _named_types, attributes, _functions) => {
+            let types = attributes.iter().map(|(_name, kind)| kind.clone() ).collect::<Vec<ValueType>>();
+
+            vec![ValueType::CustomType(types)]
         }
     }
 }

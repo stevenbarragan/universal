@@ -324,6 +324,7 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
             }
         }
         Language::Program(_) => "".to_string(),
+        Language::CustomType(name, _named_types, _attributes, _methods) => format!("(; type {} ;)", name)
     }
 }
 
@@ -348,7 +349,8 @@ fn size(value_types: &Vec<ValueType>) -> usize {
             ValueType::Integer => 4,
             ValueType::Native(_name) => 1, // fix me!
             ValueType::Symbol => 8,
-            ValueType::Array(_) => 4
+            ValueType::Array(_) => 4,
+            ValueType::CustomType(types) => size(types)
         })
         .sum()
 }
@@ -368,7 +370,8 @@ fn value_type_to_wasm(value_type: &ValueType) -> String {
         ValueType::Symbol => "i32 i32".to_string(),
         ValueType::Bool => "i32".to_string(),
         ValueType::Native(name) => name.to_string(),
-        ValueType::Array(_value_type) => "i32".to_string()
+        ValueType::Array(_value_type) => "i32".to_string(),
+        ValueType::CustomType(value_types) => value_types_to_wasm(value_types)
     }
 }
 
