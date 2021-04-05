@@ -6,6 +6,8 @@ use std::fmt;
 use std::fs;
 use std::path::Path;
 
+use crate::utils::*;
+
 #[derive(Parser)]
 #[grammar = "universal.pest"]
 pub struct UniversalParser;
@@ -42,40 +44,43 @@ pub type Results = Vec<ValueType>;
 
 pub type Variables = HashMap<String, Vec<ValueType>>;
 
-pub type Context = Vec<Variables>;
-
-pub trait ContextManagment {
-    fn start() -> Self;
-    fn add(&mut self, key: String, value: Vec<ValueType>);
-    fn find(&self, key: &String) -> Option<Vec<ValueType>>;
-    fn contains_key(&self, key: &String) -> bool;
-    fn add_new_scope(&mut self);
-    fn local_variables(&self) -> Variables;
+pub struct Context {
+    variables: Vec<Variables>,
+    types: HashMap<Name, TypeAttributes>
 }
 
-impl ContextManagment for Context {
-    fn start() -> Self {
-        vec![Variables::new()]
+impl Default for Context {
+    fn default() -> Self {
+        Context {
+            variables: vec![Variables::new()],
+            types: HashMap::new()
+        }
     }
+}
 
-    fn add(&mut self, key: String, value: Vec<ValueType>) {
-        if let Some(scope) = self.last_mut() {
+impl Context {
+    pub fn add_variable(&mut self, key: String, value: Vec<ValueType>) {
+        if let Some(scope) = self.variables.last_mut() {
             scope.insert(key, value);
         } else {
             let mut new_scope = Variables::new();
 
             new_scope.insert(key, value);
 
-            self.push(new_scope);
+            self.variables.push(new_scope);
         }
     }
 
-    fn add_new_scope(&mut self) {
-        self.push(Variables::new());
+    pub fn add_new_scope(&mut self) {
+        self.variables.push(Variables::new());
     }
 
-    fn find(&self, key: &String) -> Option<Vec<ValueType>> {
-        for variables in self.iter().rev() {
+    pub fn destroy_scope(&mut self) {
+        self.variables.pop();
+    }
+
+    pub fn find_variable(&self, key: &String) -> Option<Vec<ValueType>> {
+        for variables in self.variables.iter().rev() {
             if let Some(value) = variables.get(key) {
                 return Some(value.clone())
             }
@@ -84,8 +89,8 @@ impl ContextManagment for Context {
         None
     }
 
-    fn contains_key(&self, key: &String) -> bool {
-        for variables in self.into_iter() {
+    pub fn variable_exists(&self, key: &String) -> bool {
+        for variables in self.variables.iter() {
             if variables.contains_key(key) {
                 return true
             }
@@ -94,12 +99,34 @@ impl ContextManagment for Context {
         false
     }
 
-    fn local_variables(&self) -> Variables {
-        if let Some(variables) = self.last() {
+    pub fn local_variables(&self) -> Variables {
+        if let Some(variables) = self.variables.last() {
             variables.clone()
         } else {
             Variables::new()
         }
+    }
+
+    fn find_type_attribute_type(&self, kind: &String, attribute: &String) -> ValueType {
+       let attributes = self.types.get(kind).expect("custom type not found");
+
+       attributes.get(attribute).expect("Custom type attribute not found").clone()
+    }
+
+    pub fn calculate_memory_offset(&self, kind: &String, attribute: &String) -> usize {
+       let attributes = self.types.get(kind).expect("custom type not found");
+
+       let mut value_types = vec![];
+
+       for (name, value_type) in attributes {
+           if name == attribute {
+               break;
+           } else {
+               value_types.push(value_type)
+           }
+       }
+
+       size(value_types)
     }
 }
 
@@ -146,6 +173,8 @@ pub enum Visiblitity {
 }
 
 pub type Name = String;
+pub type Callee = String;
+pub type Message = String;
 pub type TypeAttributes = HashMap<Name, ValueType>;
 pub type NamedTypes = Vec<Name>;
 
@@ -169,6 +198,7 @@ pub enum Language {
     Program(Vec<Language>),
     Symbol(String),
     CustomType(Name, NamedTypes, TypeAttributes, Vec<Language>),
+    TypeAttributeAccess(Callee, Message),
     Variable(String, Vec<ValueType>),
     Array(Vec<Language>),
     ArrayAccess(String, usize)
@@ -218,7 +248,7 @@ pub fn find_value_type(node: &Language, scope: &Context) -> Vec<ValueType> {
             vec![ValueType::Array(array_type)]
         }
         Language::ArrayAccess(name, _index) => {
-            if let Some(kinds) = scope.find(name) {
+            if let Some(kinds) = scope.find_variable(name) {
                 kinds.into_iter()
                     .map(|kind| {
                         if let ValueType::Array(array_types) = kind {
@@ -237,6 +267,9 @@ pub fn find_value_type(node: &Language, scope: &Context) -> Vec<ValueType> {
             let types = attributes.iter().map(|(_name, kind)| kind.clone() ).collect::<Vec<ValueType>>();
 
             vec![ValueType::CustomType(types)]
+        }
+        Language::TypeAttributeAccess(callee, message) => {
+            vec![scope.find_type_attribute_type(callee, message)]
         }
     }
 }
@@ -294,7 +327,7 @@ fn build_ast(
                         Export::Function(function_name, params, returns) => {
                             let name_key = build_function_key(&function_name, &params);
 
-                            scope.add(format!("{}", name_key), returns.clone());
+                            scope.add_variable(format!("{}", name_key), returns.clone());
                         }
                     }
                 }
@@ -317,7 +350,7 @@ fn build_ast(
         Rule::variable => {
             let name = pair.as_str().to_string();
 
-            if let Some(kind) = scope.find(&name) {
+            if let Some(kind) = scope.find_variable(&name) {
                 Ok(Language::Variable(name, kind.clone()))
             } else {
                 panic!("variable: ${} not found", name)
@@ -331,7 +364,7 @@ fn build_ast(
 
             let value_type = str_to_value_type(kind);
 
-            scope.add(name.to_string(), vec![value_type.clone()]);
+            scope.add_variable(name.to_string(), vec![value_type.clone()]);
 
             Ok(Language::Variable(name, vec![value_type]))
         }
@@ -385,7 +418,7 @@ fn build_ast(
 
                     params.push((name.to_string(), kind.clone()));
 
-                    scope.add(name.to_string(), vec![kind]);
+                    scope.add_variable(name.to_string(), vec![kind]);
                 }
 
                 elem = inner.next().unwrap();
@@ -411,11 +444,11 @@ fn build_ast(
                 }
             }
 
-            scope.pop();
+            scope.destroy_scope();
 
             // function get's added on it's parent scope
             let name_key = build_function_key(&function_name, &params);
-            scope.add(name_key, results.clone());
+            scope.add_variable(name_key, results.clone());
 
             Ok(Language::Function(
                 function_name,
@@ -434,7 +467,7 @@ fn build_ast(
                 instructions.push(build_ast(instruction, scope, modules)?);
             }
 
-            scope.pop();
+            scope.destroy_scope();
 
             Ok(Language::Block(instructions))
         }
@@ -461,10 +494,10 @@ fn build_ast(
 
             let name_key = function_key(&function_name, &param_types);
 
-            if let Some(value_type) = scope.find(&name_key) {
+            if let Some(value_type) = scope.find_variable(&name_key) {
                 Ok(Language::Call(function_name, params, value_type.clone()))
             } else {
-                println!("variables: {:?}", scope);
+                println!("variables: {:?}", scope.variables);
                 println!("modules: {:?}", modules);
 
                 panic!("No variable found {}", name_key)
@@ -563,7 +596,7 @@ fn build_ast(
             };
 
             if let Language::Variable(name, types) = &left {
-                scope.add(name.clone(), types.clone());
+                scope.add_variable(name.clone(), types.clone());
             }
 
             Ok(Language::Infix(
@@ -606,7 +639,7 @@ fn str_to_value_type(value_type: &str) -> ValueType {
 pub fn to_ast(original: &str) -> Result<Language, Error<Rule>> {
     let mut block = vec![];
     let mut modules = vec![];
-    let mut scope = Context::start();
+    let mut scope = Context::default();
 
     match UniversalParser::parse(Rule::language, original) {
         Ok(pairs) => {

@@ -1,6 +1,7 @@
 pub mod ast;
 pub mod compiler;
 pub mod wasm;
+pub mod utils;
 
 use std::str;
 use wat;

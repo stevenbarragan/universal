@@ -1,4 +1,5 @@
 use crate::ast::*;
+use crate::utils::*;
 use std::collections::HashMap;
 
 #[derive(Default)]
@@ -29,7 +30,7 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
         Language::Infix(operation, left, right) => {
             if &Operation::Assignment == operation {
                 if let Language::Variable(name, value_type) = left.as_ref() {
-                    data.variables.add(name.to_string(), value_type.clone());
+                    data.variables.add_variable(name.to_string(), value_type.clone());
 
                     return format!("{} (local.set ${})", to_wasm(right, data), name);
                 }
@@ -107,8 +108,8 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
 
             let name_key = build_function_key(&name, &params);
 
-            data.variables.pop();
-            
+            data.variables.destroy_scope();
+
             format!("(func ${} {})", name_key, body)
         }
         Language::Symbol(string) => {
@@ -292,12 +293,12 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
                 Some(instruction) => {
                     let value_type = find_value_type(&instruction, &data.variables);
 
-                    data.variables.add(name.to_string(), vec![ValueType::Array(value_type.clone())]);
+                    data.variables.add_variable(name.to_string(), vec![ValueType::Array(value_type.clone())]);
 
                     size(&value_type)
                 },
                 None => {
-                    data.variables.add(name.to_string(), vec![ValueType::Array(vec![ValueType::Integer])]);
+                    data.variables.add_variable(name.to_string(), vec![ValueType::Array(vec![ValueType::Integer])]);
 
                     0
                 }
@@ -307,7 +308,7 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
 
             if instructions.len() > 0 {
                 result = format!("{} {}", result, instructions.into_iter().enumerate()
-                    .map(|(index, instruction)| format!("(local.get ${}) {} (i32.store offset={})", name, to_wasm(instruction, data), index * instruction_size)) 
+                    .map(|(index, instruction)| format!("(local.get ${}) {} (i32.store offset={})", name, to_wasm(instruction, data), index * instruction_size))
                     .collect::<Vec<String>>()
                     .join(" "));
             }
@@ -315,7 +316,7 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
             result.to_string()
         }
         Language::ArrayAccess(name, index) => {
-            if let Some(value_type) = data.variables.find(name) {
+            if let Some(value_type) = data.variables.find_variable(name) {
                 let offset = index * size(&value_type);
 
                 format!("(i32.load offset={} (local.get ${}))", offset, name)
@@ -324,7 +325,12 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
             }
         }
         Language::Program(_) => "".to_string(),
-        Language::CustomType(name, _named_types, _attributes, _methods) => format!("(; type {} ;)", name)
+        Language::CustomType(name, _named_types, _attributes, _methods) => format!("(; type {} ;)", name),
+        Language::TypeAttributeAccess(callee, message) => {
+            let offset = data.variables.calculate_memory_offset(callee, message);
+
+            format!("(i32.load offset={} (local.get ${}))", offset, callee)
+        }
     }
 }
 
@@ -332,7 +338,7 @@ fn new_variable_name(data: &Data) -> String {
     let mut index = 0;
     let mut new_name = format!("l{}", &index);
 
-    while data.variables.contains_key(&new_name) {
+    while data.variables.variable_exists(&new_name) {
         index += 1;
 
         new_name = format!("l{}", index);
@@ -341,19 +347,6 @@ fn new_variable_name(data: &Data) -> String {
     new_name
 }
 
-fn size(value_types: &Vec<ValueType>) -> usize {
-    value_types.into_iter()
-        .map(|value_type| match value_type {
-            ValueType::Bool => 1,
-            ValueType::Float => 1,
-            ValueType::Integer => 4,
-            ValueType::Native(_name) => 1, // fix me!
-            ValueType::Symbol => 8,
-            ValueType::Array(_) => 4,
-            ValueType::CustomType(types) => size(types)
-        })
-        .sum()
-}
 
 fn value_types_to_wasm(value_types: &Vec<ValueType>) -> String {
     value_types
@@ -625,14 +618,14 @@ mod test {
 
         let instruction = Array(vec![]);
         let expected = "(local.tee $l0 (memory.grow (i32.const 0)))";
-        
+
         assert_eq!(to_wasm(&instruction, &mut data), expected);
 
         let mut data: Data = Default::default();
         let instruction = Array(vec![Number(42)]);
 
         let expected = "(local.tee $l0 (memory.grow (i32.const 4))) (local.get $l0) (i32.const 42) (i32.store offset=0)";
-        
+
         assert_eq!(to_wasm(&instruction, &mut data), expected);
 
         let mut data: Data = Default::default();
@@ -644,12 +637,12 @@ mod test {
         );
 
         let expected = "(local.tee $l0 (memory.grow (i32.const 4))) (local.get $l0) (i32.const 42) (i32.store offset=0) (local.set $a)";
-        
+
         assert_eq!(to_wasm(&instruction, &mut data), expected);
 
         let instruction = ArrayAccess("a".to_string(), 0);
         let expected = "(i32.load offset=0 (local.get $a))";
-        
+
         assert_eq!(to_wasm(&instruction, &mut data), expected);
     }
 }
