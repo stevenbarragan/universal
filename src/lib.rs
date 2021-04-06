@@ -70,7 +70,7 @@ pub fn execute(string: &str) -> anyhow::Result<()> {
 
             for module in modules {
                 match &module {
-                    Language::Module(name, _functions, _instructions, _exports, _imports) => {
+                    Language::Module(name, _functions, _instructions, _exports, _imports, _types) => {
                         let wasm = wasm::to_wasm(&module, &mut data);
 
                         // std library is autoloaded

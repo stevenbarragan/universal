@@ -147,7 +147,7 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
             .map(|language| to_wasm(language, data))
             .collect::<Vec<String>>()
             .join(" "),
-        Language::Module(name, functions, instructions, exports, imports) => {
+        Language::Module(name, functions, instructions, exports, imports, types) => {
             let mut exports = exports.clone();
 
             data.modules.insert(name.to_owned(), node.clone());
@@ -158,7 +158,7 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
                     let module = data.modules.get(import_name).unwrap();
 
                     match module {
-                        Language::Module(_name, _functions, _instructions, exports, _imports) => {
+                        Language::Module(_name, _functions, _instructions, exports, _imports, _types) => {
                             exports
                                 .into_iter()
                                 .map(|export| match export {
@@ -204,6 +204,34 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
                 .map(|language| to_wasm(language, data))
                 .collect::<Vec<String>>()
                 .join(" ");
+
+            let mut types_wasm = vec![];
+            for kind in types {
+                if let Language::CustomType(name, _named_types, attributes, functions) = kind {
+                    data.variables.add_self(name);
+
+                    data.variables.add_type_attributes(name, attributes);
+
+                    for function in functions {
+                        if let Language::Function(function_name, params, results, block, visibility) = function {
+                            let new_name = format!("{}_{}", name, function_name);
+
+                            let mut new_params = params.clone();
+                            new_params.insert(0, ("self".to_string(), ValueType::Integer));
+
+                            let new_function = Language::Function(new_name, new_params, results.clone(), block.clone(), visibility.clone());
+
+                            data.variables.add_type_methods(name, function_name, results);
+
+                            types_wasm.push(to_wasm(&new_function, data))
+                        }
+                    }
+
+                    data.variables.pop_self();
+                }
+            }
+
+            let types_str = types_wasm.join(" ");
 
             let main = if instructions.is_empty() {
                 "".to_string()
@@ -251,7 +279,7 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
                 .collect::<Vec<String>>()
                 .join(" ");
 
-            let body = vec![imports_str, data_str, functions_str, main, exports_str]
+            let body = vec![imports_str, data_str, functions_str, types_str, main, exports_str]
                 .into_iter()
                 .filter(|x| x != "")
                 .collect::<Vec<String>>()
@@ -348,12 +376,12 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
 
             let name_key = function_key(&message, &param_types);
 
-            format!("(call {}_${} {})", callee, name_key, params_str)
+            format!("(call ${}_{} {})", callee, name_key, params_str)
         }
         Language::SelfMethodAccess(message, parameters) => {
             let callee = data.variables.get_self();
 
-            let mut params_str = format!("(local.get ${}) ", callee);
+            let mut params_str = format!("(local.get $self)");
 
             params_str += &parameters
                 .into_iter()
@@ -361,21 +389,17 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
                 .collect::<Vec<String>>()
                 .join(" ");
 
-            let param_types = parameters
-                .into_iter()
-                .map(|param| find_value_type(param, &data.variables))
-                .flatten()
-                .collect::<Vec<ValueType>>();
+            let param_types = data.variables.find_type_method_type(&callee, &message);
 
             let name_key = function_key(&message, &param_types);
 
-            format!("(call {}_${} {})", callee, name_key, params_str)
+            format!("(call ${}_{} {})", callee, name_key, params_str)
         }
         Language::SelfAttributeAccess(message) => {
             let callee = data.variables.get_self();
             let offset = data.variables.calculate_memory_offset(&callee, message);
 
-            format!("(i32.load offset={} (local.get ${}))", offset, callee)
+            format!("(i32.load offset={} (local.get $self))", offset)
         }
     }
 }
@@ -512,6 +536,7 @@ mod test {
     #[test]
     fn modules() {
         let mut data: Data = Default::default();
+        let types = Types::new();
 
         let function = Function(
             "tres".to_string(),
@@ -536,6 +561,7 @@ mod test {
             vec![Number(42)],
             exports,
             imports,
+            types,
         );
 
         let expected = "(module $awesome (import \"env\" \"memory\" (memory $env.memory 1)) (func $tres (result i32) (i32.const 3)) (func $main (result i32) (i32.const 42)) (export \"tres\" (func $tres)) (export \"main\" (func $main)))";
@@ -548,6 +574,7 @@ mod test {
         let mut data: Data = Default::default();
         let exports = vec![];
         let imports = vec![];
+        let types = Types::new();
 
         let module = Language::Module(
             "awesome".to_string(),
@@ -555,6 +582,7 @@ mod test {
             vec![Symbol("42".to_string())],
             exports,
             imports,
+            types,
         );
 
         let expected = "(module $awesome (import \"env\" \"memory\" (memory $env.memory 1)) (data (i32.const 0) \"42\") (func $main (result i32 i32) (i32.const 0) (i32.const 2)) (export \"main\" (func $main)))";
@@ -564,6 +592,7 @@ mod test {
         let mut data: Data = Default::default();
         let exports = vec![];
         let imports = vec![];
+        let types = Types::new();
 
         let module = Language::Module(
             "awesome".to_string(),
@@ -571,6 +600,7 @@ mod test {
             vec![Symbol("42".to_string()), Symbol("43".to_string())],
             exports,
             imports,
+            types,
         );
 
         let expected = "(module $awesome (import \"env\" \"memory\" (memory $env.memory 1)) (data (i32.const 0) \"4243\") (func $main (result i32 i32) (i32.const 0) (i32.const 2) (i32.const 2) (i32.const 2)) (export \"main\" (func $main)))";
@@ -690,5 +720,32 @@ mod test {
         let expected = "(i32.load offset=0 (local.get $a))";
 
         assert_eq!(to_wasm(&instruction, &mut data), expected);
+    }
+
+    #[test]
+    fn types() {
+        let mut data: Data = Default::default();
+
+        let program = "
+        module Test
+            Type People
+              age: Int
+
+              fn calculate(): Int
+                self.age
+              end
+
+              fn age(): Int
+                self.calculate()
+              end
+            end
+        end
+        ";
+
+        let ast = to_ast(program).unwrap();
+
+        let expected = "(module $Test (import \"env\" \"memory\" (memory $env.memory 1)) (func $People_calculate_int (param $self i32) (result i32) (i32.load offset=0 (local.get $self))) (func $People_age_int (param $self i32) (result i32) (call $People_calculate_int (local.get $self))))";
+
+        assert_eq!(to_wasm(&ast, &mut data), expected);
     }
 }

@@ -58,12 +58,36 @@ impl Default for Context {
             variables: vec![Variables::new()],
             types_attributes: HashMap::new(),
             types_methods: HashMap::new(),
-            selfs: vec![],
+            selfs: vec!["".to_string()],
         }
     }
 }
 
 impl Context {
+    pub fn add_self(&mut self, name: &str) {
+        self.selfs.push(name.to_string());
+    }
+
+    pub fn pop_self(&mut self) {
+        self.selfs.pop();
+    }
+
+    pub fn add_type_attributes(&mut self, name: &str, attributes: &Attributes) {
+        self.types_attributes.insert(name.to_string(), attributes.clone());
+    }
+
+    pub fn add_type_methods(&mut self, name: &str, method_name: &str, results: &Results) {
+        if let Some(type_methods) = self.types_methods.get_mut(name) {
+            type_methods.insert(method_name.to_string(), results.clone());
+        } else {
+            let mut type_methods = HashMap::new();
+
+            type_methods.insert(method_name.to_string(), results.clone());
+
+            self.types_methods.insert(name.to_string(), type_methods);
+        };
+    }
+
     pub fn add_variable(&mut self, key: String, value: Vec<ValueType>) {
         if let Some(scope) = self.variables.last_mut() {
             scope.insert(key, value);
@@ -118,7 +142,7 @@ impl Context {
        attributes.get(attribute).expect("Custom type attribute not found").clone()
     }
 
-    fn find_type_method_type(&self, kind: &String, message: &String) -> Vec<ValueType> {
+    pub fn find_type_method_type(&self, kind: &String, message: &String) -> Vec<ValueType> {
        let method = self.types_methods.get(kind).expect("custom type not found");
 
        method.get(message).expect("Custom type method not found").clone()
@@ -194,6 +218,7 @@ pub type Attributes = HashMap<Name, ValueType>;
 pub type NamedTypes = Vec<Name>;
 pub type Parameters = Vec<Language>;
 pub type Functions = Vec<Language>;
+pub type Types = Vec<Language>;
 
 #[derive(Debug, PartialEq, Clone, Eq)]
 pub enum Language {
@@ -210,7 +235,7 @@ pub enum Language {
     Function(String, Params, Results, Block, Visiblitity),
     Import(Import),
     Infix(Operation, Box<Language>, Box<Language>),
-    Module(String, Vec<Language>, Block, Vec<Export>, Vec<Import>),
+    Module(String, Vec<Language>, Block, Vec<Export>, Vec<Import>, Types),
     Number(i64),
     Program(Vec<Language>),
     Symbol(String),
@@ -239,7 +264,7 @@ pub fn find_value_type(node: &Language, scope: &Context) -> Vec<ValueType> {
                 panic!("No instructions")
             }
         }
-        Language::Module(_, _, instructions, _, _) => {
+        Language::Module(_, _, instructions, _, _, _) => {
             if let Some(instruction) = instructions.last() {
                 find_value_type(instruction, scope)
             } else {
@@ -352,7 +377,7 @@ fn build_ast(
 
             let module = to_ast_from_file(path)?;
 
-            if let Language::Module(_module_name, _functions, _instructions, exports, _imports) =
+            if let Language::Module(_module_name, _functions, _instructions, exports, _imports, _types) =
                 &module
             {
                 for export in exports {
@@ -541,6 +566,7 @@ fn build_ast(
             let mut functions = vec![];
             let mut exports = vec![];
             let mut imports = vec![];
+            let mut types = Types::new();
 
             let mut inner = pair.into_inner();
 
@@ -567,6 +593,17 @@ fn build_ast(
                         functions.push(ast);
                     }
                     Language::Import(filepath) => imports.push(filepath.to_string()),
+                    Language::CustomType(name, _named_types, attributes, functions) => {
+                        scope.add_type_attributes(name, attributes);
+
+                        for function in functions {
+                            if let Language::Function(function_name, _params, results, _instructions, _visibility) = function {
+                                scope.add_type_methods(name, function_name, results);
+                            }
+                        }
+
+                        types.push(ast);
+                    }
                     _ => instructions.push(ast),
                 }
             }
@@ -577,6 +614,7 @@ fn build_ast(
                 instructions,
                 exports,
                 imports,
+                types
             ))
         }
         Rule::symbol => {
@@ -846,6 +884,7 @@ mod test {
     fn modules() {
         let exports = vec![];
         let imports = vec![];
+        let types = vec![];
 
         let module = to_ast(
             "module awesome
@@ -860,6 +899,7 @@ mod test {
             vec![Number(42)],
             exports,
             imports,
+            types,
         );
 
         assert_eq!(module, Ok(expected));
@@ -882,12 +922,14 @@ mod test {
 
         let exports = vec![];
         let imports = vec![];
+        let types = vec![];
         let expected = Language::Module(
             "awesome".to_string(),
             vec![function],
             vec![],
             exports,
             imports,
+            types
         );
 
         assert_eq!(module, Ok(expected));
@@ -914,12 +956,14 @@ mod test {
             vec![ValueType::Integer],
         )];
         let imports = vec![];
+        let types = vec![];
         let expected = Language::Module(
             "awesome".to_string(),
             vec![function],
             vec![],
             exports,
             imports,
+            types
         );
 
         assert_eq!(module, Ok(expected));
@@ -951,7 +995,7 @@ mod test {
         let ast = to_ast(program).expect("error loading program");
 
         let instruction = match ast {
-            Module(_, _, instructions, _, _) => instructions.last()
+            Module(_, _, instructions, _, _, _types) => instructions.last()
                 .expect("no instructions on module")
                 .clone(),
             _ => unreachable!(),
@@ -999,7 +1043,7 @@ mod test {
         let ast = to_ast(program).expect("error loading program");
 
         let instructions = match ast {
-            Module(_, _, instructions, _, _) => instructions,
+            Module(_, _, instructions, _, _, _types) => instructions,
             _ => unreachable!(),
         };
 
@@ -1037,7 +1081,7 @@ mod test {
         let ast = to_ast(program).expect("error loading program");
 
         let instruction = match ast {
-            Module(_, _, instructions, _, _) => instructions.last()
+            Module(_, _, instructions, _, _, _types) => instructions.last()
                 .expect("no instructions on module")
                 .clone(),
             _ => unreachable!(),
@@ -1323,6 +1367,7 @@ mod test {
                     vec![ValueType::Integer],
                 )],
                 vec![],
+                vec![],
             ),
             Import("test".to_string()),
         ]);
@@ -1340,6 +1385,8 @@ mod test {
             end
         ";
 
+        let types = Types::new();
+
         let function = Function(
             "hello".to_string(),
             vec![],
@@ -1354,15 +1401,18 @@ mod test {
             vec![],
             vec![export],
             vec![],
+            types,
         );
 
         let instruction = Call("hello".to_string(), vec![], vec![ValueType::Integer]);
+        let types = Types::new();
         let main_module = Module(
             "main".to_string(),
             vec![],
             vec![instruction],
             vec![],
             vec!["test".to_string()],
+            types,
         );
 
         let expected = Program(vec![test_module, main_module]);
