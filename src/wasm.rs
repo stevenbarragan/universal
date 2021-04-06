@@ -481,7 +481,7 @@ fn value_type_to_wasm(value_type: &ValueType) -> String {
         ValueType::Bool => "i32".to_string(),
         ValueType::Native(name) => name.to_string(),
         ValueType::Array(_value_type) => "i32".to_string(),
-        ValueType::CustomType(value_types) => value_types_to_wasm(value_types),
+        ValueType::CustomType(_name, _value_types) => "i32".to_string(),
     }
 }
 

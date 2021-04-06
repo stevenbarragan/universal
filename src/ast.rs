@@ -20,7 +20,7 @@ pub enum ValueType {
     Native(String),
     Symbol,
     Array(Vec<ValueType>),
-    CustomType(Vec<ValueType>),
+    CustomType(Name, Vec<ValueType>),
 }
 
 impl fmt::Display for ValueType {
@@ -32,7 +32,7 @@ impl fmt::Display for ValueType {
             ValueType::Native(native_type) => f.write_str(&native_type),
             ValueType::Symbol => f.write_str("symbol"),
             ValueType::Array(_value_type) => f.write_str("array"),
-            ValueType::CustomType(_) => f.write_str("type"),
+            ValueType::CustomType(name, _types) => f.write_str(name),
         }
     }
 }
@@ -329,13 +329,13 @@ pub fn find_value_type(node: &Language, scope: &Context) -> Vec<ValueType> {
                 panic!("variable: ${} not found", name)
             }
         }
-        Language::CustomType(_name, _named_types, attributes, _functions) => {
+        Language::CustomType(name, _named_types, attributes, _functions) => {
             let types = attributes
                 .iter()
                 .map(|(_name, kind)| kind.clone())
                 .collect::<Vec<ValueType>>();
 
-            vec![ValueType::CustomType(types)]
+            vec![ValueType::CustomType(name.clone(), types)]
         }
         Language::TypeAttributeAccess(callee, message) => {
             vec![scope.find_type_attribute_type(callee, message)]

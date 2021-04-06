@@ -10,7 +10,7 @@ pub fn size(value_types: &Vec<ValueType>) -> usize {
             ValueType::Native(_name) => 1, // fix me!
             ValueType::Symbol => 8,
             ValueType::Array(_) => 4,
-            ValueType::CustomType(types) => size(types),
+            ValueType::CustomType(_name, types) => size(types),
         })
         .sum()
 }
