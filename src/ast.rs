@@ -48,7 +48,8 @@ pub type Methods = HashMap<String, Vec<ValueType>>;
 pub struct Context {
     variables: Vec<Variables>,
     types_attributes: HashMap<Name, Attributes>,
-    types_methods: HashMap<Name, Methods>
+    types_methods: HashMap<Name, Methods>,
+    selfs: Vec<String>
 }
 
 impl Default for Context {
@@ -56,7 +57,8 @@ impl Default for Context {
         Context {
             variables: vec![Variables::new()],
             types_attributes: HashMap::new(),
-            types_methods: HashMap::new()
+            types_methods: HashMap::new(),
+            selfs: vec![],
         }
     }
 }
@@ -137,6 +139,10 @@ impl Context {
 
        size(&value_types)
     }
+
+    pub fn get_self(&self) -> String {
+        self.selfs.last().expect("No self found").to_string()
+    }
 }
 
 #[derive(Debug, PartialEq, Clone, Hash, Eq)]
@@ -213,7 +219,9 @@ pub enum Language {
     TypeCall(Callee, Message, Parameters),
     Variable(String, Vec<ValueType>),
     Array(Vec<Language>),
-    ArrayAccess(String, usize)
+    ArrayAccess(String, usize),
+    SelfMethodAccess(Message, Parameters),
+    SelfAttributeAccess(Message)
 }
 
 pub fn find_value_type(node: &Language, scope: &Context) -> Vec<ValueType> {
@@ -285,6 +293,16 @@ pub fn find_value_type(node: &Language, scope: &Context) -> Vec<ValueType> {
         }
         Language::TypeCall(callee, message, _parameters) => {
             scope.find_type_method_type(callee, message)
+        }
+        Language::SelfMethodAccess(message, _parameters) => {
+            let callee = scope.get_self();
+
+            scope.find_type_method_type(&callee, message)
+        }
+        Language::SelfAttributeAccess(message) => {
+            let callee = scope.get_self();
+
+            vec![scope.find_type_attribute_type(&callee, message)]
         }
     }
 }
@@ -637,6 +655,72 @@ fn build_ast(
             let index = inner.next().unwrap().as_str();
 
             Ok(Language::ArrayAccess(name.to_string(), index.parse().unwrap()))
+        }
+        Rule::self_attribute_access => {
+            let mut inner = pair.into_inner();
+
+            let name = inner.next().unwrap().as_str();
+
+            Ok(Language::SelfAttributeAccess(name.to_string()))
+        }
+        Rule::self_function_call => {
+            let mut self_function_call = pair.into_inner();
+            let pair = self_function_call.next().unwrap();
+
+            let mut function_call = pair.into_inner();
+
+            let function_name = function_call.next().unwrap().as_str().to_string();
+
+            println!("function_name: {}", function_name);
+
+            let mut params = vec![];
+
+            if let Some(pair_params) = function_call.next() {
+                let mut params_inner = pair_params.into_inner();
+
+                while let Some(param) = params_inner.next() {
+                    params.push(build_ast(param, scope, modules)?);
+                }
+            }
+
+            Ok(Language::SelfMethodAccess(function_name, params))
+        }
+        Rule::custom_type => {
+            let mut attributes = Attributes::new();
+            let mut methods = vec![];
+
+            let mut inner = pair.into_inner();
+
+            let named_types = NamedTypes::new();
+            let name = inner.next().unwrap().as_str();
+
+            if let Some(attributes_rule) = inner.next() {
+                let mut attributes_inner = attributes_rule.into_inner();
+
+                let attribute = attributes_inner.next().expect("No attributes");
+
+                let mut attribute_inner = attribute.into_inner();
+
+                let name = attribute_inner.next().unwrap().as_str();
+                let kind = attribute_inner.next().unwrap().as_str();
+
+                attributes.insert(name.to_string(), str_to_value_type(kind));
+            }
+
+            if let Some(methods_rule) = inner.next() {
+                let mut methods_inner = methods_rule.into_inner();
+
+                while let Some(method) = methods_inner.next() {
+                    methods.push(build_ast(method, scope, modules)?);
+                }
+            }
+
+            Ok(Language::CustomType(
+                    name.to_string(),
+                    named_types,
+                    attributes,
+                    methods
+            ))
         }
         x => panic!("No rule match: {:?}", x),
     }
@@ -1332,5 +1416,50 @@ mod test {
         ]);
         assert_eq!(to_ast(program), Ok(expected));
 
+    }
+
+    #[test]
+    fn types() {
+        let program = "
+        Type People
+          age: Int
+
+          fn calculate(): Int
+            self.age
+          end
+
+          fn age(): Int
+            self.calculate()
+          end
+        end
+        ";
+
+        let named_types = NamedTypes::new();
+
+        let mut attributes = Attributes::new();
+        attributes.insert("age".to_string(), ValueType::Integer);
+
+        let function_calculate = Function(
+            "calculate".to_owned(),Params::new(),
+            vec![ValueType::Integer],
+            vec![SelfAttributeAccess("age".to_string())],
+            Visiblitity::Private
+        );
+
+        let function_age = Function(
+            "age".to_owned(),Params::new(),
+            vec![ValueType::Integer],
+            vec![SelfMethodAccess("calculate".to_string(), Parameters::new())],
+            Visiblitity::Private
+        );
+
+        let expected = CustomType(
+            "People".to_owned(),
+            named_types,
+            attributes,
+            vec![function_calculate, function_age]
+        );
+
+        assert_eq!(to_ast(program), Ok(expected));
     }
 }

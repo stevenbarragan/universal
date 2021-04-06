@@ -350,6 +350,33 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
 
             format!("(call {}_${} {})", callee, name_key, params_str)
         }
+        Language::SelfMethodAccess(message, parameters) => {
+            let callee = data.variables.get_self();
+
+            let mut params_str = format!("(local.get ${}) ", callee);
+
+            params_str += &parameters
+                .into_iter()
+                .map(|language| to_wasm(language, data))
+                .collect::<Vec<String>>()
+                .join(" ");
+
+            let param_types = parameters
+                .into_iter()
+                .map(|param| find_value_type(param, &data.variables))
+                .flatten()
+                .collect::<Vec<ValueType>>();
+
+            let name_key = function_key(&message, &param_types);
+
+            format!("(call {}_${} {})", callee, name_key, params_str)
+        }
+        Language::SelfAttributeAccess(message) => {
+            let callee = data.variables.get_self();
+            let offset = data.variables.calculate_memory_offset(&callee, message);
+
+            format!("(i32.load offset={} (local.get ${}))", offset, callee)
+        }
     }
 }
 
