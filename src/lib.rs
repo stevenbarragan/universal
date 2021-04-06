@@ -1,14 +1,14 @@
 pub mod ast;
 pub mod compiler;
-pub mod wasm;
 pub mod utils;
+pub mod wasm;
 
 use std::str;
 use wat;
 
-use wasmtime::*;
-use wasmtime_wasi::{Wasi};
 use wasi_cap_std_sync::WasiCtxBuilder;
+use wasmtime::*;
+use wasmtime_wasi::Wasi;
 
 extern crate pest;
 
@@ -41,9 +41,9 @@ pub fn execute(string: &str) -> anyhow::Result<()> {
             let wasi = Wasi::new(
                 &store,
                 WasiCtxBuilder::new()
-                .inherit_stdio()
-                .inherit_args()?
-                .build()?,
+                    .inherit_stdio()
+                    .inherit_args()?
+                    .build()?,
             );
             wasi.add_to_linker(&mut linker)?;
 
@@ -70,7 +70,14 @@ pub fn execute(string: &str) -> anyhow::Result<()> {
 
             for module in modules {
                 match &module {
-                    Language::Module(name, _functions, _instructions, _exports, _imports, _types) => {
+                    Language::Module(
+                        name,
+                        _functions,
+                        _instructions,
+                        _exports,
+                        _imports,
+                        _types,
+                    ) => {
                         let wasm = wasm::to_wasm(&module, &mut data);
 
                         // std library is autoloaded

@@ -30,7 +30,8 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
         Language::Infix(operation, left, right) => {
             if &Operation::Assignment == operation {
                 if let Language::Variable(name, value_type) = left.as_ref() {
-                    data.variables.add_variable(name.to_string(), value_type.clone());
+                    data.variables
+                        .add_variable(name.to_string(), value_type.clone());
 
                     return format!("{} (local.set ${})", to_wasm(right, data), name);
                 }
@@ -89,9 +90,13 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
                 .collect::<Vec<String>>()
                 .join(" ");
 
-            let locals =  data.variables.local_variables()
+            let locals = data
+                .variables
+                .local_variables()
                 .iter()
-                .map(|(name, value_type)| format!("(local ${} {})", name, value_types_to_wasm(&value_type)))
+                .map(|(name, value_type)| {
+                    format!("(local ${} {})", name, value_types_to_wasm(&value_type))
+                })
                 .collect::<Vec<String>>()
                 .join(" ");
 
@@ -158,41 +163,42 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
                     let module = data.modules.get(import_name).unwrap();
 
                     match module {
-                        Language::Module(_name, _functions, _instructions, exports, _imports, _types) => {
-                            exports
-                                .into_iter()
-                                .map(|export| match export {
-                                    Export::Function(function_name, params, results) => {
-                                        let results_str = value_types_to_wasm(results);
+                        Language::Module(
+                            _name,
+                            _functions,
+                            _instructions,
+                            exports,
+                            _imports,
+                            _types,
+                        ) => exports
+                            .into_iter()
+                            .map(|export| match export {
+                                Export::Function(function_name, params, results) => {
+                                    let results_str = value_types_to_wasm(results);
 
-                                        let params_types = params
-                                            .iter()
-                                            .map(|param| param.1.clone())
-                                            .collect::<Vec<ValueType>>();
+                                    let params_types = params
+                                        .iter()
+                                        .map(|param| param.1.clone())
+                                        .collect::<Vec<ValueType>>();
 
-                                        let params_str = if params.len() > 0 {
-                                            let params_str = value_types_to_wasm(&params_types);
+                                    let params_str = if params.len() > 0 {
+                                        let params_str = value_types_to_wasm(&params_types);
 
-                                            format!("(param {})", params_str)
-                                        } else {
-                                            "".to_string()
-                                        };
+                                        format!("(param {})", params_str)
+                                    } else {
+                                        "".to_string()
+                                    };
 
-                                        let name_key = build_function_key(&function_name, &params);
+                                    let name_key = build_function_key(&function_name, &params);
 
-                                        format!(
-                                            "(import \"{}\" \"{}\" (func ${} {} (result {})))",
-                                            import_name,
-                                            name_key,
-                                            name_key,
-                                            params_str,
-                                            results_str
-                                        )
-                                    }
-                                })
-                                .collect::<Vec<String>>()
-                                .join(" ")
-                        }
+                                    format!(
+                                        "(import \"{}\" \"{}\" (func ${} {} (result {})))",
+                                        import_name, name_key, name_key, params_str, results_str
+                                    )
+                                }
+                            })
+                            .collect::<Vec<String>>()
+                            .join(" "),
                         _ => unreachable!(),
                     }
                 })
@@ -213,15 +219,29 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
                     data.variables.add_type_attributes(name, attributes);
 
                     for function in functions {
-                        if let Language::Function(function_name, params, results, block, visibility) = function {
+                        if let Language::Function(
+                            function_name,
+                            params,
+                            results,
+                            block,
+                            visibility,
+                        ) = function
+                        {
                             let new_name = format!("{}_{}", name, function_name);
 
                             let mut new_params = params.clone();
                             new_params.insert(0, ("self".to_string(), ValueType::Integer));
 
-                            let new_function = Language::Function(new_name, new_params, results.clone(), block.clone(), visibility.clone());
+                            let new_function = Language::Function(
+                                new_name,
+                                new_params,
+                                results.clone(),
+                                block.clone(),
+                                visibility.clone(),
+                            );
 
-                            data.variables.add_type_methods(name, function_name, results);
+                            data.variables
+                                .add_type_methods(name, function_name, results);
 
                             types_wasm.push(to_wasm(&new_function, data))
                         }
@@ -279,11 +299,18 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
                 .collect::<Vec<String>>()
                 .join(" ");
 
-            let body = vec![imports_str, data_str, functions_str, types_str, main, exports_str]
-                .into_iter()
-                .filter(|x| x != "")
-                .collect::<Vec<String>>()
-                .join(" ");
+            let body = vec![
+                imports_str,
+                data_str,
+                functions_str,
+                types_str,
+                main,
+                exports_str,
+            ]
+            .into_iter()
+            .filter(|x| x != "")
+            .collect::<Vec<String>>()
+            .join(" ");
 
             format!("(module ${} {})", name, body)
         }
@@ -321,24 +348,43 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
                 Some(instruction) => {
                     let value_type = find_value_type(&instruction, &data.variables);
 
-                    data.variables.add_variable(name.to_string(), vec![ValueType::Array(value_type.clone())]);
+                    data.variables
+                        .add_variable(name.to_string(), vec![ValueType::Array(value_type.clone())]);
 
                     size(&value_type)
-                },
+                }
                 None => {
-                    data.variables.add_variable(name.to_string(), vec![ValueType::Array(vec![ValueType::Integer])]);
+                    data.variables.add_variable(
+                        name.to_string(),
+                        vec![ValueType::Array(vec![ValueType::Integer])],
+                    );
 
                     0
                 }
             };
 
-            let mut result = format!("(local.tee ${} (memory.grow (i32.const {})))", name, instruction_size * instructions.len());
+            let mut result = format!(
+                "(local.tee ${} (memory.grow (i32.const {})))",
+                name,
+                instruction_size * instructions.len()
+            );
 
             if instructions.len() > 0 {
-                result = format!("{} {}", result, instructions.into_iter().enumerate()
-                    .map(|(index, instruction)| format!("(local.get ${}) {} (i32.store offset={})", name, to_wasm(instruction, data), index * instruction_size))
-                    .collect::<Vec<String>>()
-                    .join(" "));
+                result = format!(
+                    "{} {}",
+                    result,
+                    instructions
+                        .into_iter()
+                        .enumerate()
+                        .map(|(index, instruction)| format!(
+                            "(local.get ${}) {} (i32.store offset={})",
+                            name,
+                            to_wasm(instruction, data),
+                            index * instruction_size
+                        ))
+                        .collect::<Vec<String>>()
+                        .join(" ")
+                );
             }
 
             result.to_string()
@@ -353,7 +399,9 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
             }
         }
         Language::Program(_) => "".to_string(),
-        Language::CustomType(name, _named_types, _attributes, _methods) => format!("(; type {} ;)", name),
+        Language::CustomType(name, _named_types, _attributes, _methods) => {
+            format!("(; type {} ;)", name)
+        }
         Language::TypeAttributeAccess(callee, message) => {
             let offset = data.variables.calculate_memory_offset(callee, message);
 
@@ -417,7 +465,6 @@ fn new_variable_name(data: &Data) -> String {
     new_name
 }
 
-
 fn value_types_to_wasm(value_types: &Vec<ValueType>) -> String {
     value_types
         .iter()
@@ -434,7 +481,7 @@ fn value_type_to_wasm(value_type: &ValueType) -> String {
         ValueType::Bool => "i32".to_string(),
         ValueType::Native(name) => name.to_string(),
         ValueType::Array(_value_type) => "i32".to_string(),
-        ValueType::CustomType(value_types) => value_types_to_wasm(value_types)
+        ValueType::CustomType(value_types) => value_types_to_wasm(value_types),
     }
 }
 
@@ -709,7 +756,7 @@ mod test {
         let instruction = Infix(
             Operation::Assignment,
             Box::new(Variable("a".to_string(), vec![array_type])),
-            Box::new(Array(vec![Number(42)]))
+            Box::new(Array(vec![Number(42)])),
         );
 
         let expected = "(local.tee $l0 (memory.grow (i32.const 4))) (local.get $l0) (i32.const 42) (i32.store offset=0) (local.set $a)";

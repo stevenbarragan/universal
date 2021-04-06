@@ -20,7 +20,7 @@ pub enum ValueType {
     Native(String),
     Symbol,
     Array(Vec<ValueType>),
-    CustomType(Vec<ValueType>)
+    CustomType(Vec<ValueType>),
 }
 
 impl fmt::Display for ValueType {
@@ -49,7 +49,7 @@ pub struct Context {
     variables: Vec<Variables>,
     types_attributes: HashMap<Name, Attributes>,
     types_methods: HashMap<Name, Methods>,
-    selfs: Vec<String>
+    selfs: Vec<String>,
 }
 
 impl Default for Context {
@@ -73,7 +73,8 @@ impl Context {
     }
 
     pub fn add_type_attributes(&mut self, name: &str, attributes: &Attributes) {
-        self.types_attributes.insert(name.to_string(), attributes.clone());
+        self.types_attributes
+            .insert(name.to_string(), attributes.clone());
     }
 
     pub fn add_type_methods(&mut self, name: &str, method_name: &str, results: &Results) {
@@ -111,7 +112,7 @@ impl Context {
     pub fn find_variable(&self, key: &String) -> Option<Vec<ValueType>> {
         for variables in self.variables.iter().rev() {
             if let Some(value) = variables.get(key) {
-                return Some(value.clone())
+                return Some(value.clone());
             }
         }
 
@@ -121,7 +122,7 @@ impl Context {
     pub fn variable_exists(&self, key: &String) -> bool {
         for variables in self.variables.iter() {
             if variables.contains_key(key) {
-                return true
+                return true;
             }
         }
 
@@ -137,31 +138,43 @@ impl Context {
     }
 
     fn find_type_attribute_type(&self, kind: &String, attribute: &String) -> ValueType {
-       let attributes = self.types_attributes.get(kind).expect("custom type not found");
+        let attributes = self
+            .types_attributes
+            .get(kind)
+            .expect("custom type not found");
 
-       attributes.get(attribute).expect("Custom type attribute not found").clone()
+        attributes
+            .get(attribute)
+            .expect("Custom type attribute not found")
+            .clone()
     }
 
     pub fn find_type_method_type(&self, kind: &String, message: &String) -> Vec<ValueType> {
-       let method = self.types_methods.get(kind).expect("custom type not found");
+        let method = self.types_methods.get(kind).expect("custom type not found");
 
-       method.get(message).expect("Custom type method not found").clone()
+        method
+            .get(message)
+            .expect("Custom type method not found")
+            .clone()
     }
 
     pub fn calculate_memory_offset(&self, kind: &String, attribute: &String) -> usize {
-       let attributes = self.types_attributes.get(kind).expect("custom type not found");
+        let attributes = self
+            .types_attributes
+            .get(kind)
+            .expect("custom type not found");
 
-       let mut value_types = vec![];
+        let mut value_types = vec![];
 
-       for (name, value_type) in attributes {
-           if name == attribute {
-               break;
-           } else {
-               value_types.push(value_type.clone())
-           }
-       }
+        for (name, value_type) in attributes {
+            if name == attribute {
+                break;
+            } else {
+                value_types.push(value_type.clone())
+            }
+        }
 
-       size(&value_types)
+        size(&value_types)
     }
 
     pub fn get_self(&self) -> String {
@@ -235,7 +248,14 @@ pub enum Language {
     Function(String, Params, Results, Block, Visiblitity),
     Import(Import),
     Infix(Operation, Box<Language>, Box<Language>),
-    Module(String, Vec<Language>, Block, Vec<Export>, Vec<Import>, Types),
+    Module(
+        String,
+        Vec<Language>,
+        Block,
+        Vec<Export>,
+        Vec<Import>,
+        Types,
+    ),
     Number(i64),
     Program(Vec<Language>),
     Symbol(String),
@@ -246,7 +266,7 @@ pub enum Language {
     Array(Vec<Language>),
     ArrayAccess(String, usize),
     SelfMethodAccess(Message, Parameters),
-    SelfAttributeAccess(Message)
+    SelfAttributeAccess(Message),
 }
 
 pub fn find_value_type(node: &Language, scope: &Context) -> Vec<ValueType> {
@@ -294,7 +314,8 @@ pub fn find_value_type(node: &Language, scope: &Context) -> Vec<ValueType> {
         }
         Language::ArrayAccess(name, _index) => {
             if let Some(kinds) = scope.find_variable(name) {
-                kinds.into_iter()
+                kinds
+                    .into_iter()
                     .map(|kind| {
                         if let ValueType::Array(array_types) = kind {
                             array_types.clone()
@@ -302,14 +323,17 @@ pub fn find_value_type(node: &Language, scope: &Context) -> Vec<ValueType> {
                             panic!("Variable {} is not an array", name)
                         }
                     })
-                .flatten()
-                .collect::<Vec<ValueType>>()
+                    .flatten()
+                    .collect::<Vec<ValueType>>()
             } else {
                 panic!("variable: ${} not found", name)
             }
         }
         Language::CustomType(_name, _named_types, attributes, _functions) => {
-            let types = attributes.iter().map(|(_name, kind)| kind.clone() ).collect::<Vec<ValueType>>();
+            let types = attributes
+                .iter()
+                .map(|(_name, kind)| kind.clone())
+                .collect::<Vec<ValueType>>();
 
             vec![ValueType::CustomType(types)]
         }
@@ -377,8 +401,14 @@ fn build_ast(
 
             let module = to_ast_from_file(path)?;
 
-            if let Language::Module(_module_name, _functions, _instructions, exports, _imports, _types) =
-                &module
+            if let Language::Module(
+                _module_name,
+                _functions,
+                _instructions,
+                exports,
+                _imports,
+                _types,
+            ) = &module
             {
                 for export in exports {
                     match export {
@@ -597,7 +627,14 @@ fn build_ast(
                         scope.add_type_attributes(name, attributes);
 
                         for function in functions {
-                            if let Language::Function(function_name, _params, results, _instructions, _visibility) = function {
+                            if let Language::Function(
+                                function_name,
+                                _params,
+                                results,
+                                _instructions,
+                                _visibility,
+                            ) = function
+                            {
                                 scope.add_type_methods(name, function_name, results);
                             }
                         }
@@ -614,7 +651,7 @@ fn build_ast(
                 instructions,
                 exports,
                 imports,
-                types
+                types,
             ))
         }
         Rule::symbol => {
@@ -692,7 +729,10 @@ fn build_ast(
             let name = inner.next().unwrap().as_str();
             let index = inner.next().unwrap().as_str();
 
-            Ok(Language::ArrayAccess(name.to_string(), index.parse().unwrap()))
+            Ok(Language::ArrayAccess(
+                name.to_string(),
+                index.parse().unwrap(),
+            ))
         }
         Rule::self_attribute_access => {
             let mut inner = pair.into_inner();
@@ -754,10 +794,10 @@ fn build_ast(
             }
 
             Ok(Language::CustomType(
-                    name.to_string(),
-                    named_types,
-                    attributes,
-                    methods
+                name.to_string(),
+                named_types,
+                attributes,
+                methods,
             ))
         }
         x => panic!("No rule match: {:?}", x),
@@ -929,7 +969,7 @@ mod test {
             vec![],
             exports,
             imports,
-            types
+            types,
         );
 
         assert_eq!(module, Ok(expected));
@@ -963,7 +1003,7 @@ mod test {
             vec![],
             exports,
             imports,
-            types
+            types,
         );
 
         assert_eq!(module, Ok(expected));
@@ -995,7 +1035,8 @@ mod test {
         let ast = to_ast(program).expect("error loading program");
 
         let instruction = match ast {
-            Module(_, _, instructions, _, _, _types) => instructions.last()
+            Module(_, _, instructions, _, _, _types) => instructions
+                .last()
                 .expect("no instructions on module")
                 .clone(),
             _ => unreachable!(),
@@ -1081,7 +1122,8 @@ mod test {
         let ast = to_ast(program).expect("error loading program");
 
         let instruction = match ast {
-            Module(_, _, instructions, _, _, _types) => instructions.last()
+            Module(_, _, instructions, _, _, _types) => instructions
+                .last()
                 .expect("no instructions on module")
                 .clone(),
             _ => unreachable!(),
@@ -1432,7 +1474,7 @@ mod test {
         let expected = Infix(
             Operation::Assignment,
             Box::new(Variable("a".to_string(), vec![array_type])),
-            Box::new(Array(vec![]))
+            Box::new(Array(vec![])),
         );
 
         assert_eq!(to_ast(program), Ok(expected));
@@ -1447,7 +1489,7 @@ mod test {
         let expected = Infix(
             Operation::Assignment,
             Box::new(Variable("a".to_string(), vec![array_type])),
-            Box::new(Array(vec![Number(1), Number(2)]))
+            Box::new(Array(vec![Number(1), Number(2)])),
         );
         assert_eq!(to_ast(program), Ok(expected));
 
@@ -1460,12 +1502,11 @@ mod test {
             Infix(
                 Operation::Assignment,
                 Box::new(Variable("a".to_string(), vec![array_type])),
-                Box::new(Array(vec![Number(1)]))
+                Box::new(Array(vec![Number(1)])),
             ),
-            ArrayAccess("a".to_string(), 0)
+            ArrayAccess("a".to_string(), 0),
         ]);
         assert_eq!(to_ast(program), Ok(expected));
-
     }
 
     #[test]
@@ -1490,24 +1531,26 @@ mod test {
         attributes.insert("age".to_string(), ValueType::Integer);
 
         let function_calculate = Function(
-            "calculate".to_owned(),Params::new(),
+            "calculate".to_owned(),
+            Params::new(),
             vec![ValueType::Integer],
             vec![SelfAttributeAccess("age".to_string())],
-            Visiblitity::Private
+            Visiblitity::Private,
         );
 
         let function_age = Function(
-            "age".to_owned(),Params::new(),
+            "age".to_owned(),
+            Params::new(),
             vec![ValueType::Integer],
             vec![SelfMethodAccess("calculate".to_string(), Parameters::new())],
-            Visiblitity::Private
+            Visiblitity::Private,
         );
 
         let expected = CustomType(
             "People".to_owned(),
             named_types,
             attributes,
-            vec![function_calculate, function_age]
+            vec![function_calculate, function_age],
         );
 
         assert_eq!(to_ast(program), Ok(expected));
