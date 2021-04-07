@@ -403,28 +403,43 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
             format!("(; type {} ;)", name)
         }
         Language::TypeAttributeAccess(callee, message) => {
-            let offset = data.variables.calculate_memory_offset(callee, message);
+            let variable_types = data.variables.find_variable(callee).unwrap();
 
-            format!("(i32.load offset={} (local.get ${}))", offset, callee)
+            if let Some(ValueType::CustomType(name, _types)) = variable_types.first() {
+                let offset = data.variables.calculate_memory_offset(name, message);
+
+                format!("(i32.load offset={} (local.get ${}))", offset, callee)
+            } else {
+                panic!("Variable {} has no types", callee);
+            }
         }
         Language::TypeCall(callee, message, parameters) => {
-            let mut params_str = format!("(local.get ${}) ", callee);
+            let variable_types = data.variables.find_variable(callee).unwrap();
 
-            params_str += &parameters
-                .into_iter()
-                .map(|language| to_wasm(language, data))
-                .collect::<Vec<String>>()
-                .join(" ");
+            if let Some(ValueType::CustomType(name, _types)) = variable_types.first() {
+                let mut params_str = format!("(local.get ${}) ", callee);
 
-            let param_types = parameters
-                .into_iter()
-                .map(|param| find_value_type(param, &data.variables))
-                .flatten()
-                .collect::<Vec<ValueType>>();
+                params_str += &parameters
+                    .into_iter()
+                    .map(|language| to_wasm(language, data))
+                    .collect::<Vec<String>>()
+                    .join(" ");
 
-            let name_key = function_key(&message, &param_types);
+                let mut param_types = parameters
+                    .into_iter()
+                    .map(|param| find_value_type(param, &data.variables))
+                    .flatten()
+                    .collect::<Vec<ValueType>>();
 
-            format!("(call ${}_{} {})", callee, name_key, params_str)
+                // first parameter will be self always
+                param_types.insert(0, ValueType::Integer);
+
+                let name_key = function_key(&message, &param_types);
+
+                format!("(call ${}_{} {})", name, name_key, params_str)
+            } else {
+                panic!("{}.{} is not a custom type", callee, message);
+            }
         }
         Language::SelfMethodAccess(message, parameters) => {
             let callee = data.variables.get_self();
@@ -452,21 +467,26 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
         Language::TypeInstance(name, _named_types, values) => {
             let attributes = data.variables.find_type_attribute(name);
 
-            let types = attributes.into_iter().map(|(attr_name, kind)| kind ).collect();
-        
+            let types = attributes
+                .into_iter()
+                .map(|(_attr_name, kind)| kind)
+                .collect();
+
             let total_size = size(&types);
 
             let variable_name = new_variable_name_with_prefix(name, &data);
 
+            data.variables
+                .add_variable(variable_name.to_string(), types);
+
             let mut result = format!(
                 "(local.tee ${} (memory.grow (i32.const {})))",
-                variable_name,
-                total_size
+                variable_name, total_size
             );
 
             let mut pointer = 0;
 
-            for (attr_name, value) in values {
+            for (_attr_name, value) in values {
                 result = format!(
                     "{} {}",
                     result,

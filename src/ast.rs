@@ -1,10 +1,10 @@
+use indexmap::IndexMap;
 use pest::error::Error;
 use pest::iterators::{Pair, Pairs};
 use pest::Parser;
 use std::fmt;
 use std::fs;
 use std::path::Path;
-use indexmap::IndexMap;
 
 use crate::utils::*;
 
@@ -141,16 +141,50 @@ impl Context {
         }
     }
 
-    fn find_type_attribute_type(&self, kind: &String, attribute: &String) -> ValueType {
-        let attributes = self
-            .types_attributes
-            .get(kind)
-            .expect("custom type not found");
+    fn find_type_attribute_type(
+        &self,
+        variable: &String,
+        attribute: &String,
+        scope: &Context,
+    ) -> Option<ValueType> {
+        let variable_types = scope.find_variable(variable).unwrap();
 
-        attributes
-            .get(attribute)
-            .expect("Custom type attribute not found")
-            .clone()
+        if let Some(ValueType::CustomType(name, types)) = variable_types.first() {
+            let attributes = self
+                .types_attributes
+                .get(name)
+                .expect("custom type not found");
+
+            return Some(
+                attributes
+                    .get(attribute)
+                    .expect("Custom type attribute not found")
+                    .clone(),
+            );
+        }
+
+        None
+    }
+
+    fn find_type_call_type(
+        &self,
+        variable: &String,
+        attribute: &String,
+        scope: &Context,
+    ) -> Option<Vec<ValueType>> {
+        let variable_types = scope.find_variable(variable).unwrap();
+
+        if let Some(ValueType::CustomType(name, types)) = variable_types.first() {
+            let methods = self.types_methods.get(name).unwrap();
+
+            for (name, types) in methods {
+                if name == attribute {
+                    return Some(types.clone());
+                }
+            }
+        }
+
+        None
     }
 
     pub fn find_type_method_type(&self, kind: &String, message: &String) -> Vec<ValueType> {
@@ -343,20 +377,24 @@ pub fn find_value_type(node: &Language, scope: &Context) -> Vec<ValueType> {
             vec![ValueType::CustomType(name.clone(), types)]
         }
         Language::TypeAttributeAccess(callee, message) => {
-            vec![scope.find_type_attribute_type(callee, message)]
+            vec![scope
+                .find_type_attribute_type(callee, message, scope)
+                .unwrap()]
         }
         Language::TypeCall(callee, message, _parameters) => {
-            scope.find_type_method_type(callee, message)
+            scope.find_type_call_type(callee, message, scope).unwrap()
         }
         Language::SelfMethodAccess(message, _parameters) => {
-            let callee = scope.get_self();
+            let callee_type = scope.get_self();
 
-            scope.find_type_method_type(&callee, message)
+            scope.find_type_method_type(&callee_type, message)
         }
         Language::SelfAttributeAccess(message) => {
             let callee = scope.get_self();
 
-            vec![scope.find_type_attribute_type(&callee, message)]
+            vec![scope
+                .find_type_attribute_type(&callee, message, scope)
+                .unwrap()]
         }
         Language::TypeInstance(name, _named_types, values) => {
             let types = values
@@ -755,6 +793,39 @@ fn build_ast(
 
             Ok(Language::SelfAttributeAccess(name.to_string()))
         }
+        Rule::variable_attribute_access => {
+            let mut inner = pair.into_inner();
+
+            let name = inner.next().unwrap().as_str();
+            let method = inner.next().unwrap().as_str();
+
+            Ok(Language::TypeAttributeAccess(
+                name.to_string(),
+                method.to_string(),
+            ))
+        }
+        Rule::variable_method_call => {
+            let mut self_function_call = pair.into_inner();
+
+            let name = self_function_call.next().unwrap().as_str();
+            let pair = self_function_call.next().unwrap();
+
+            let mut function_call = pair.into_inner();
+
+            let function_name = function_call.next().unwrap().as_str().to_string();
+
+            let mut params = vec![];
+
+            if let Some(pair_params) = function_call.next() {
+                let mut params_inner = pair_params.into_inner();
+
+                while let Some(param) = params_inner.next() {
+                    params.push(build_ast(param, scope, modules)?);
+                }
+            }
+
+            Ok(Language::TypeCall(name.to_string(), function_name, params))
+        }
         Rule::self_function_call => {
             let mut self_function_call = pair.into_inner();
             let pair = self_function_call.next().unwrap();
@@ -762,8 +833,6 @@ fn build_ast(
             let mut function_call = pair.into_inner();
 
             let function_name = function_call.next().unwrap().as_str().to_string();
-
-            println!("function_name: {}", function_name);
 
             let mut params = vec![];
 
@@ -827,12 +896,19 @@ fn build_ast(
 
                 while let Some(attribute) = attributes_inner.next() {
                     let instruction = attributes_inner.next().unwrap();
-                    
-                    values.insert(attribute.as_str().to_string(), build_ast(instruction, scope, modules)?);
+
+                    values.insert(
+                        attribute.as_str().to_string(),
+                        build_ast(instruction, scope, modules)?,
+                    );
                 }
             }
 
-            Ok(Language::TypeInstance(name.to_string(), named_types, values))
+            Ok(Language::TypeInstance(
+                name.to_string(),
+                named_types,
+                values,
+            ))
         }
         x => panic!("No rule match: {:?}", x),
     }
@@ -1609,12 +1685,7 @@ mod test {
         let mut attributes = Attributes::new();
         attributes.insert("level".to_string(), ValueType::Native("i32".to_string()));
 
-        let custom_type = CustomType(
-            "Person".to_owned(),
-            named_types,
-            attributes,
-            vec![],
-        );
+        let custom_type = CustomType("Person".to_owned(), named_types, attributes, vec![]);
 
         let mut person_values = IndexMap::new();
         person_values.insert("level".to_string(), Number(5));

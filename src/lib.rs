@@ -66,6 +66,16 @@ pub fn execute(string: &str) -> anyhow::Result<()> {
                 x
             })?;
 
+            linker.func("std", "puts_i32", |x: i32| {
+                println!("{}", x);
+                x
+            })?;
+
+            linker.func("std", "print_i32", |x: i32| {
+                print!("{}", x);
+                x
+            })?;
+
             let mut instances = vec![];
 
             for module in modules {

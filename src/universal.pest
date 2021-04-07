@@ -10,7 +10,7 @@ factor_operator = { "*" | "/" }
 unary = { (unary_operator ~ primary) | primary }
 unary_operator = { "!" | "-" }
 primary = { "(" ~ expression ~ ")" | array | array_access | endvalues }
-endvalues  = _{ custom_type_instance | symbol | float | integer | conditional | self_function_call | self_attribute_access | function_call | bool | variable }
+endvalues  = _{ custom_type_instance | symbol | float | integer | conditional | self_function_call | self_attribute_access | variable_method_call | variable_attribute_access | function_call | bool | variable }
 
 float = @{ integer ~ "." ~ integer }
 
@@ -46,6 +46,9 @@ integer = @{ NUMBER+ }
 function_call = { function_name ~ "(" ~ function_params? ~ ")" }
 function_params = { expression ~ ("," ~ expression)* }
 function_name = { name ~ ("." ~ name)? }
+
+variable_attribute_access = { name ~ "." ~ name }
+variable_method_call = { name ~ "." ~ function_call }
 
 self_function_call = {"self." ~ function_call }
 self_attribute_access = {"self." ~ name }
