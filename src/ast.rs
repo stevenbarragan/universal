@@ -64,6 +64,10 @@ impl Default for Context {
 }
 
 impl Context {
+    pub fn find_type_attribute(&self, name: &str) -> Attributes {
+        self.types_attributes.get(name).unwrap().clone()
+    }
+
     pub fn add_self(&mut self, name: &str) {
         self.selfs.push(name.to_string());
     }
@@ -818,13 +822,14 @@ fn build_ast(
             let mut values = HashMap::new();
             let named_types = NamedTypes::new();
 
-            while let Some(attributes_values) = inner.next() {
-                let mut attributes_inner = attributes_values.into_inner();
+            if let Some(attributes) = inner.next() {
+                let mut attributes_inner = attributes.into_inner();
 
-                let attribute = attributes_inner.next().unwrap().as_str();
-                let instruction = attributes_inner.next().unwrap();
-
-                values.insert(attribute.to_string(), build_ast(instruction, scope, modules)?);
+                while let Some(attribute) = attributes_inner.next() {
+                    let instruction = attributes_inner.next().unwrap();
+                    
+                    values.insert(attribute.as_str().to_string(), build_ast(instruction, scope, modules)?);
+                }
             }
 
             Ok(Language::TypeInstance(name.to_string(), named_types, values))

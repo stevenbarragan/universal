@@ -449,17 +449,55 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
 
             format!("(i32.load offset={} (local.get $self))", offset)
         }
+        Language::TypeInstance(name, _named_types, values) => {
+            let attributes = data.variables.find_type_attribute(name);
+
+            let types = attributes.into_iter().map(|(attr_name, kind)| kind ).collect();
+        
+            let total_size = size(&types);
+
+            let variable_name = new_variable_name_with_prefix(name, &data);
+
+            let mut result = format!(
+                "(local.tee ${} (memory.grow (i32.const {})))",
+                variable_name,
+                total_size
+            );
+
+            let mut pointer = 0;
+
+            for (attr_name, value) in values {
+                result = format!(
+                    "{} {}",
+                    result,
+                    format!(
+                        "(local.get ${}) {} (i32.store offset={})",
+                        variable_name,
+                        to_wasm(value, data),
+                        pointer,
+                    )
+                );
+
+                pointer += size(&find_value_type(value, &data.variables));
+            }
+
+            result.to_string()
+        }
     }
 }
 
 fn new_variable_name(data: &Data) -> String {
+    new_variable_name_with_prefix("l", data)
+}
+
+fn new_variable_name_with_prefix(prefix: &str, data: &Data) -> String {
     let mut index = 0;
-    let mut new_name = format!("l{}", &index);
+    let mut new_name = format!("{}{}", prefix, &index);
 
     while data.variables.variable_exists(&new_name) {
         index += 1;
 
-        new_name = format!("l{}", index);
+        new_name = format!("{}{}", prefix, &index);
     }
 
     new_name
@@ -777,6 +815,7 @@ mod test {
         module Test
             Type People
               age: Int
+              index: Int
 
               fn calculate(): Int
                 self.age
@@ -786,12 +825,17 @@ mod test {
                 self.calculate()
               end
             end
+
+            People
+              age: 20
+              index: 24
+            end
         end
         ";
 
         let ast = to_ast(program).unwrap();
 
-        let expected = "(module $Test (import \"env\" \"memory\" (memory $env.memory 1)) (func $People_calculate_int (param $self i32) (result i32) (i32.load offset=0 (local.get $self))) (func $People_age_int (param $self i32) (result i32) (call $People_calculate_int (local.get $self))))";
+        let expected = "(module $Test (import \"env\" \"memory\" (memory $env.memory 1)) (func $People_calculate_int (param $self i32) (result i32) (i32.load offset=0 (local.get $self))) (func $People_age_int (param $self i32) (result i32) (call $People_calculate_int (local.get $self))) (func $main (result i32) (local.tee $People0 (memory.grow (i32.const 4))) (local.get $People0) (i32.const 24) (i32.store offset=0) (local.get $People0) (i32.const 20) (i32.store offset=4)) (export \"main\" (func $main)))";
 
         assert_eq!(to_wasm(&ast, &mut data), expected);
     }
