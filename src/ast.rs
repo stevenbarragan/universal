@@ -1,10 +1,10 @@
 use pest::error::Error;
 use pest::iterators::{Pair, Pairs};
 use pest::Parser;
-use std::collections::HashMap;
 use std::fmt;
 use std::fs;
 use std::path::Path;
+use indexmap::IndexMap;
 
 use crate::utils::*;
 
@@ -42,13 +42,13 @@ pub type Modules = Vec<Language>;
 pub type Params = Vec<(String, ValueType)>;
 pub type Results = Vec<ValueType>;
 
-pub type Variables = HashMap<String, Vec<ValueType>>;
-pub type Methods = HashMap<String, Vec<ValueType>>;
+pub type Variables = IndexMap<String, Vec<ValueType>>;
+pub type Methods = IndexMap<String, Vec<ValueType>>;
 
 pub struct Context {
     variables: Vec<Variables>,
-    types_attributes: HashMap<Name, Attributes>,
-    types_methods: HashMap<Name, Methods>,
+    types_attributes: IndexMap<Name, Attributes>,
+    types_methods: IndexMap<Name, Methods>,
     selfs: Vec<String>,
 }
 
@@ -56,8 +56,8 @@ impl Default for Context {
     fn default() -> Self {
         Context {
             variables: vec![Variables::new()],
-            types_attributes: HashMap::new(),
-            types_methods: HashMap::new(),
+            types_attributes: IndexMap::new(),
+            types_methods: IndexMap::new(),
             selfs: vec!["".to_string()],
         }
     }
@@ -85,7 +85,7 @@ impl Context {
         if let Some(type_methods) = self.types_methods.get_mut(name) {
             type_methods.insert(method_name.to_string(), results.clone());
         } else {
-            let mut type_methods = HashMap::new();
+            let mut type_methods = IndexMap::new();
 
             type_methods.insert(method_name.to_string(), results.clone());
 
@@ -231,7 +231,7 @@ pub enum Visiblitity {
 pub type Name = String;
 pub type Callee = String;
 pub type Message = String;
-pub type Attributes = HashMap<Name, ValueType>;
+pub type Attributes = IndexMap<Name, ValueType>;
 pub type NamedTypes = Vec<Name>;
 pub type Parameters = Vec<Language>;
 pub type Functions = Vec<Language>;
@@ -266,7 +266,7 @@ pub enum Language {
     CustomType(Name, NamedTypes, Attributes, Functions),
     TypeAttributeAccess(Callee, Message),
     TypeCall(Callee, Message, Parameters),
-    TypeInstance(Name, NamedTypes, HashMap<Name, Language>),
+    TypeInstance(Name, NamedTypes, IndexMap<Name, Language>),
     Variable(String, Vec<ValueType>),
     Array(Vec<Language>),
     ArrayAccess(String, usize),
@@ -819,7 +819,7 @@ fn build_ast(
 
             let name = inner.next().unwrap().as_str();
 
-            let mut values = HashMap::new();
+            let mut values = IndexMap::new();
             let named_types = NamedTypes::new();
 
             if let Some(attributes) = inner.next() {
@@ -1616,7 +1616,7 @@ mod test {
             vec![],
         );
 
-        let mut person_values = HashMap::new();
+        let mut person_values = IndexMap::new();
         person_values.insert("level".to_string(), Number(5));
 
         let named_types = NamedTypes::new();

@@ -29,7 +29,7 @@ falsey = { "false" }
 array = { "[" ~ (instruction ~ ("," ~ instruction )*)? ~ "]" }
 array_access = ${ variable ~ "[" ~ integer ~ "]" }
 
-assignation = { (variable_def | variable) ~ "=" ~ expression }
+assignation = { (variable_def | variable) ~ "=" ~ instruction }
 
 import = { "import" ~ filepath }
 filepath = @{ LETTER+ }

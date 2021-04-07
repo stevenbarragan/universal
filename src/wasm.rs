@@ -1,13 +1,13 @@
 use crate::ast::*;
 use crate::utils::*;
-use std::collections::HashMap;
+use indexmap::IndexMap;
 
 #[derive(Default)]
 pub struct Data {
-    pointers: HashMap<String, (usize, usize)>,
+    pointers: IndexMap<String, (usize, usize)>,
     memory: String,
     variables: Context,
-    modules: HashMap<String, Language>,
+    modules: IndexMap<String, Language>,
 }
 
 pub fn to_wasm(node: &Language, data: &mut Data) -> String {
@@ -835,7 +835,7 @@ mod test {
 
         let ast = to_ast(program).unwrap();
 
-        let expected = "(module $Test (import \"env\" \"memory\" (memory $env.memory 1)) (func $People_calculate_int (param $self i32) (result i32) (i32.load offset=0 (local.get $self))) (func $People_age_int (param $self i32) (result i32) (call $People_calculate_int (local.get $self))) (func $main (result i32) (local.tee $People0 (memory.grow (i32.const 4))) (local.get $People0) (i32.const 24) (i32.store offset=0) (local.get $People0) (i32.const 20) (i32.store offset=4)) (export \"main\" (func $main)))";
+        let expected = "(module $Test (import \"env\" \"memory\" (memory $env.memory 1)) (func $People_calculate_int (param $self i32) (result i32) (i32.load offset=0 (local.get $self))) (func $People_age_int (param $self i32) (result i32) (call $People_calculate_int (local.get $self))) (func $main (result i32) (local.tee $People0 (memory.grow (i32.const 4))) (local.get $People0) (i32.const 20) (i32.store offset=0) (local.get $People0) (i32.const 24) (i32.store offset=4)) (export \"main\" (func $main)))";
 
         assert_eq!(to_wasm(&ast, &mut data), expected);
     }

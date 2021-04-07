@@ -8,11 +8,12 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1.0.32"
+indexmap = "1.6.2"
 pest = "2.1"
 pest_derive = "2.1"
 rustyline = "6.3.0"
 rustyline-derive = "0.2.0"
+"wasi-cap-std-sync" = "0.25.0"
 wasmtime = "0.25.0"
 wasmtime-wasi = "0.25.0"
-"wasi-cap-std-sync" = "0.25.0"
 wat = "1.0.36"
