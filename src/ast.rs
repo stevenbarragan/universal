@@ -262,6 +262,7 @@ pub enum Language {
     CustomType(Name, NamedTypes, Attributes, Functions),
     TypeAttributeAccess(Callee, Message),
     TypeCall(Callee, Message, Parameters),
+    TypeInstance(Name, NamedTypes, HashMap<Name, Language>),
     Variable(String, Vec<ValueType>),
     Array(Vec<Language>),
     ArrayAccess(String, usize),
@@ -352,6 +353,15 @@ pub fn find_value_type(node: &Language, scope: &Context) -> Vec<ValueType> {
             let callee = scope.get_self();
 
             vec![scope.find_type_attribute_type(&callee, message)]
+        }
+        Language::TypeInstance(name, _named_types, values) => {
+            let types = values
+                .iter()
+                .map(|(_name, instruction)| find_value_type(instruction, scope))
+                .flatten()
+                .collect::<Vec<ValueType>>();
+
+            vec![ValueType::CustomType(name.clone(), types)]
         }
     }
 }
@@ -799,6 +809,25 @@ fn build_ast(
                 attributes,
                 methods,
             ))
+        }
+        Rule::custom_type_instance => {
+            let mut inner = pair.into_inner();
+
+            let name = inner.next().unwrap().as_str();
+
+            let mut values = HashMap::new();
+            let named_types = NamedTypes::new();
+
+            while let Some(attributes_values) = inner.next() {
+                let mut attributes_inner = attributes_values.into_inner();
+
+                let attribute = attributes_inner.next().unwrap().as_str();
+                let instruction = attributes_inner.next().unwrap();
+
+                values.insert(attribute.to_string(), build_ast(instruction, scope, modules)?);
+            }
+
+            Ok(Language::TypeInstance(name.to_string(), named_types, values))
         }
         x => panic!("No rule match: {:?}", x),
     }
@@ -1510,7 +1539,7 @@ mod test {
     }
 
     #[test]
-    fn types() {
+    fn types_definition() {
         let program = "
         Type People
           age: Int
@@ -1551,6 +1580,50 @@ mod test {
             named_types,
             attributes,
             vec![function_calculate, function_age],
+        );
+
+        assert_eq!(to_ast(program), Ok(expected));
+    }
+
+    #[test]
+    fn types_instances() {
+        let program = "
+        module Test
+            Type Person
+              level: i32
+            end
+
+            Person
+              level: 5
+            end
+        end
+        ";
+
+        let named_types = NamedTypes::new();
+
+        let mut attributes = Attributes::new();
+        attributes.insert("level".to_string(), ValueType::Native("i32".to_string()));
+
+        let custom_type = CustomType(
+            "Person".to_owned(),
+            named_types,
+            attributes,
+            vec![],
+        );
+
+        let mut person_values = HashMap::new();
+        person_values.insert("level".to_string(), Number(5));
+
+        let named_types = NamedTypes::new();
+        let instruction = TypeInstance("Person".to_string(), named_types, person_values);
+
+        let expected = Module(
+            "Test".to_string(),
+            vec![],
+            vec![instruction],
+            vec![],
+            vec![],
+            vec![custom_type],
         );
 
         assert_eq!(to_ast(program), Ok(expected));

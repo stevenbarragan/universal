@@ -1,6 +1,6 @@
 language = _{ NEWLINE* ~ (module | expression ~(NEWLINE* ~ expression)* | function_def) }
 
-expression = { custom_type |assignation | import | instruction }
+expression = { custom_type | assignation | import | instruction }
 instruction = { (boolean ~ (boolean_operator ~ boolean)*) }
 boolean_operator = { "==" | "!=" | "<=" | ">=" | "<" | ">" | "min" | "max" }
 boolean = { summand ~ (summand_operator ~ summand)* }
@@ -10,9 +10,13 @@ factor_operator = { "*" | "/" }
 unary = { (unary_operator ~ primary) | primary }
 unary_operator = { "!" | "-" }
 primary = { "(" ~ expression ~ ")" | array | array_access | endvalues }
-endvalues  = _{ symbol | float | integer | conditional | self_function_call | self_attribute_access | function_call | bool | variable }
+endvalues  = _{ custom_type_instance | symbol | float | integer | conditional | self_function_call | self_attribute_access | function_call | bool | variable }
 
 float = @{ integer ~ "." ~ integer }
+
+custom_type_instance = { type_name ~ NEWLINE ~ attributes_values ~ "end" }
+type_name = @{ UPPERCASE_LETTER ~ (LETTER | NUMBER)* }
+attributes_values = { (name ~ ":" ~ instruction ~ NEWLINE)* }
 
 custom_type = {"Type" ~ name ~ NEWLINE+ ~ attributes ~ NEWLINE* ~ methods ~ NEWLINE* ~ "end" }
 attributes = { (variable_def ~ NEWLINE+)* }
