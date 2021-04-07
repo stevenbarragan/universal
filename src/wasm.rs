@@ -476,8 +476,10 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
 
             let variable_name = new_variable_name_with_prefix(name, &data);
 
-            data.variables
-                .add_variable(variable_name.to_string(), types);
+            data.variables.add_variable(
+                variable_name.to_string(),
+                vec![ValueType::Native("i32".to_string())],
+            );
 
             let mut result = format!(
                 "(local.tee ${} (memory.grow (i32.const {})))",

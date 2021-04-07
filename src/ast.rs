@@ -150,23 +150,17 @@ impl Context {
         let variable_types = scope.find_variable(variable).unwrap();
 
         if let Some(ValueType::CustomType(name, types)) = variable_types.first() {
-            let attributes = self
-                .types_attributes
-                .get(name)
-                .expect("custom type not found");
-
-            return Some(
-                attributes
-                    .get(attribute)
-                    .expect("Custom type attribute not found")
-                    .clone(),
-            );
+            if let Some(attributes) = self.types_attributes.get(name) {
+                if let Some(kind) = attributes.get(attribute) {
+                    return Some(kind.clone());
+                }
+            }
         }
 
         None
     }
 
-    fn find_type_call_type(
+    fn find_custom_caller_type(
         &self,
         variable: &String,
         attribute: &String,
@@ -311,7 +305,7 @@ pub enum Language {
 pub fn find_value_type(node: &Language, scope: &Context) -> Vec<ValueType> {
     match node {
         Language::Variable(_, value_type) => value_type.clone(),
-        Language::Number(_) => vec![ValueType::Integer],
+        Language::Number(_) => vec![ValueType::Native("i32".to_string())],
         Language::Float(_) => vec![ValueType::Float],
         Language::Infix(_, _, right) => find_value_type(right, scope),
         Language::Function(_, _, results, _, _) => results.clone(),
@@ -381,9 +375,9 @@ pub fn find_value_type(node: &Language, scope: &Context) -> Vec<ValueType> {
                 .find_type_attribute_type(callee, message, scope)
                 .unwrap()]
         }
-        Language::TypeCall(callee, message, _parameters) => {
-            scope.find_type_call_type(callee, message, scope).unwrap()
-        }
+        Language::TypeCall(callee, message, _parameters) => scope
+            .find_custom_caller_type(callee, message, scope)
+            .unwrap(),
         Language::SelfMethodAccess(message, _parameters) => {
             let callee_type = scope.get_self();
 
@@ -397,11 +391,12 @@ pub fn find_value_type(node: &Language, scope: &Context) -> Vec<ValueType> {
                 .unwrap()]
         }
         Language::TypeInstance(name, _named_types, values) => {
-            let types = values
+            let attributes = scope.find_type_attribute(name);
+
+            let types = attributes
                 .iter()
-                .map(|(_name, instruction)| find_value_type(instruction, scope))
-                .flatten()
-                .collect::<Vec<ValueType>>();
+                .map(|(_name, kind)| kind.clone())
+                .collect();
 
             vec![ValueType::CustomType(name.clone(), types)]
         }
@@ -858,14 +853,15 @@ fn build_ast(
             if let Some(attributes_rule) = inner.next() {
                 let mut attributes_inner = attributes_rule.into_inner();
 
-                let attribute = attributes_inner.next().expect("No attributes");
+                while let Some(attribute) = attributes_inner.next() {
+                    let mut attribute_inner = attribute.into_inner();
 
-                let mut attribute_inner = attribute.into_inner();
+                    if let Some(name) = attribute_inner.next() {
+                        let kind = attribute_inner.next().unwrap().as_str();
 
-                let name = attribute_inner.next().unwrap().as_str();
-                let kind = attribute_inner.next().unwrap().as_str();
-
-                attributes.insert(name.to_string(), str_to_value_type(kind));
+                        attributes.insert(name.as_str().to_string(), str_to_value_type(kind));
+                    }
+                }
             }
 
             if let Some(methods_rule) = inner.next() {
