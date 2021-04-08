@@ -234,7 +234,10 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
                             new_params
                                 .insert(0, ("self".to_string(), ValueType::Native(Native::i32)));
 
-                            let params_types: Vec<ValueType> = new_params.iter().map(|(name, kind)| kind.clone() ).collect();
+                            let params_types: Vec<ValueType> = new_params
+                                .iter()
+                                .map(|(_name, kind)| kind.clone())
+                                .collect();
 
                             let new_function = Language::Function(
                                 new_name,
@@ -322,7 +325,8 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
             let conditional_str = to_wasm(instruction, data);
             let block_str = to_wasm(block, data);
 
-            let instruction_type = value_types_to_wasm(&find_value_type(&instruction, &data.variables));
+            let instruction_type =
+                value_types_to_wasm(&find_value_type(&instruction, &data.variables));
 
             match conditional_type {
                 ConditionalType::If => match block2 {
@@ -344,7 +348,10 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
                         block_str,
                         to_wasm(x, data)
                     ),
-                    None => format!("(if ({}.eqz {}) (then {}))", instruction_type, conditional_str, block_str),
+                    None => format!(
+                        "(if ({}.eqz {}) (then {}))",
+                        instruction_type, conditional_str, block_str
+                    ),
                 },
             }
         }
@@ -417,7 +424,10 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
 
                 let type_str = value_types_to_wasm(&variable_types);
 
-                format!("({}.load offset={} (local.get ${}))", type_str, offset, callee)
+                format!(
+                    "({}.load offset={} (local.get ${}))",
+                    type_str, offset, callee
+                )
             } else {
                 panic!("Variable {} has no types", callee);
             }
@@ -576,7 +586,10 @@ mod test {
             vec![ValueType::Native(Native::i32)],
             vec![Infix(
                 Operation::Add,
-                Box::new(Variable("num".to_string(), vec![ValueType::Native(Native::i32)])),
+                Box::new(Variable(
+                    "num".to_string(),
+                    vec![ValueType::Native(Native::i32)],
+                )),
                 Box::new(Number(2)),
             )],
             Visiblitity::Private,
@@ -646,7 +659,10 @@ mod test {
         let mut data: Data = Default::default();
         let assignation = Infix(
             Operation::Assignment,
-            Box::new(Variable("x".to_string(), vec![ValueType::Native(Native::i32)])),
+            Box::new(Variable(
+                "x".to_string(),
+                vec![ValueType::Native(Native::i32)],
+            )),
             Box::new(Number(1)),
         );
 

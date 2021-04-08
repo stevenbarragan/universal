@@ -159,7 +159,7 @@ impl Context {
     ) -> Option<ValueType> {
         let variable_types = scope.find_variable(variable).unwrap();
 
-        if let Some(ValueType::CustomType(name, types)) = variable_types.first() {
+        if let Some(ValueType::CustomType(name, _types)) = variable_types.first() {
             if let Some(attributes) = self.types_attributes.get(name) {
                 if let Some(kind) = attributes.get(attribute) {
                     return Some(kind.clone());
@@ -178,7 +178,7 @@ impl Context {
     ) -> Option<Vec<ValueType>> {
         let variable_types = scope.find_variable(variable).unwrap();
 
-        if let Some(ValueType::CustomType(name, types)) = variable_types.first() {
+        if let Some(ValueType::CustomType(name, _types)) = variable_types.first() {
             let methods = self.types_methods.get(name).unwrap();
 
             for (name, types) in methods {
@@ -400,7 +400,7 @@ pub fn find_value_type(node: &Language, scope: &Context) -> Vec<ValueType> {
                 .find_type_attribute_type(&callee, message, scope)
                 .unwrap()]
         }
-        Language::TypeInstance(name, _named_types, values) => {
+        Language::TypeInstance(name, _named_types, _values) => {
             let attributes = scope.find_type_attribute(name);
 
             let types = attributes
@@ -927,7 +927,7 @@ fn str_to_value_type(value_type: &str) -> ValueType {
         "Symbol" => ValueType::Symbol,
         "i32" => ValueType::Native(Native::i32),
         "i64" => ValueType::Native(Native::i64),
-        kind => ValueType::Native(Native::i64), // illegal
+        _kind => ValueType::Native(Native::i32), // illegal
     }
 }
 
@@ -1209,7 +1209,11 @@ mod test {
         assert_eq!(
             instructions,
             vec![
-                Call("tres".to_string(), vec![], vec![ValueType::Native(Native::i32)]),
+                Call(
+                    "tres".to_string(),
+                    vec![],
+                    vec![ValueType::Native(Native::i32)]
+                ),
                 Call(
                     "add".to_string(),
                     vec![Number(1), Number(2)],
@@ -1251,7 +1255,10 @@ mod test {
             instruction,
             Infix(
                 Operation::Add,
-                Box::new(Variable("x".to_string(), vec![ValueType::Native(Native::i32)])),
+                Box::new(Variable(
+                    "x".to_string(),
+                    vec![ValueType::Native(Native::i32)]
+                )),
                 Box::new(Number(1))
             )
         );
@@ -1263,7 +1270,10 @@ mod test {
             to_ast("x: i32 = 1"),
             Ok(Infix(
                 Operation::Assignment,
-                Box::new(Variable("x".to_string(), vec![ValueType::Native(Native::i32)])),
+                Box::new(Variable(
+                    "x".to_string(),
+                    vec![ValueType::Native(Native::i32)]
+                )),
                 Box::new(Number(1))
             ))
         );
@@ -1272,7 +1282,10 @@ mod test {
             to_ast("x = 1"),
             Ok(Infix(
                 Operation::Assignment,
-                Box::new(Variable("x".to_string(), vec![ValueType::Native(Native::i32)])),
+                Box::new(Variable(
+                    "x".to_string(),
+                    vec![ValueType::Native(Native::i32)]
+                )),
                 Box::new(Number(1))
             ))
         );
