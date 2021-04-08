@@ -230,7 +230,9 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
                             let new_name = format!("{}_{}", name, function_name);
 
                             let mut new_params = params.clone();
-                            new_params.insert(0, ("self".to_string(), ValueType::Integer));
+                            // first parameter will always be self type pointer
+                            new_params
+                                .insert(0, ("self".to_string(), ValueType::Native(Native::i32)));
 
                             let new_function = Language::Function(
                                 new_name,
@@ -431,8 +433,8 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
                     .flatten()
                     .collect::<Vec<ValueType>>();
 
-                // first parameter will be self always
-                param_types.insert(0, ValueType::Integer);
+                // first parameter will be self always with type pointer
+                param_types.insert(0, ValueType::Native(Native::i32));
 
                 let name_key = function_key(&message, &param_types);
 
@@ -477,8 +479,10 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
             let variable_name = new_variable_name_with_prefix(name, &data);
 
             // add temporal variable pointer into method variables
-            data.variables
-                .add_variable(variable_name.to_string(), vec![ValueType::Native(Native::i32)]);
+            data.variables.add_variable(
+                variable_name.to_string(),
+                vec![ValueType::Native(Native::i32)],
+            );
 
             let mut result = format!(
                 "(local.tee ${} (memory.grow (i32.const {})))",
