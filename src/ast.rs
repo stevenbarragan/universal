@@ -13,6 +13,7 @@ use crate::utils::*;
 pub struct UniversalParser;
 
 #[derive(Debug, PartialEq, Clone, Hash, Eq)]
+#[allow(non_camel_case_types)]
 pub enum Native {
     i32,
     i64,
@@ -314,7 +315,7 @@ pub enum Language {
 pub fn find_value_type(node: &Language, scope: &Context) -> Vec<ValueType> {
     match node {
         Language::Variable(_, value_type) => value_type.clone(),
-        Language::Number(_) => vec![ValueType::Native(Native::i64)],
+        Language::Number(_) => vec![ValueType::Native(Native::i32)],
         Language::Float(_) => vec![ValueType::Float],
         Language::Infix(_, _, right) => find_value_type(right, scope),
         Language::Function(_, _, results, _, _) => results.clone(),
@@ -1161,7 +1162,7 @@ mod test {
 
         assert_eq!(
             instruction,
-            Variable("x".to_string(), vec![ValueType::Integer])
+            Variable("x".to_string(), vec![ValueType::Native(Native::i32)])
         );
     }
 
@@ -1185,11 +1186,11 @@ mod test {
     fn function_call() {
         let program = "
             module test
-              fn tres(): Int
+              fn tres(): i32
                   3
               end
 
-              fn add(x: Int, y: Int): Int
+              fn add(x: i32, y: i32): i32
                 x + y
               end
 
@@ -1208,11 +1209,11 @@ mod test {
         assert_eq!(
             instructions,
             vec![
-                Call("tres".to_string(), vec![], vec![ValueType::Integer]),
+                Call("tres".to_string(), vec![], vec![ValueType::Native(Native::i32)]),
                 Call(
                     "add".to_string(),
                     vec![Number(1), Number(2)],
-                    vec![ValueType::Integer]
+                    vec![ValueType::Native(Native::i32)]
                 ),
             ]
         );
@@ -1250,7 +1251,7 @@ mod test {
             instruction,
             Infix(
                 Operation::Add,
-                Box::new(Variable("x".to_string(), vec![ValueType::Integer])),
+                Box::new(Variable("x".to_string(), vec![ValueType::Native(Native::i32)])),
                 Box::new(Number(1))
             )
         );
@@ -1259,10 +1260,10 @@ mod test {
     #[test]
     fn assignations() {
         assert_eq!(
-            to_ast("x: Int = 1"),
+            to_ast("x: i32 = 1"),
             Ok(Infix(
                 Operation::Assignment,
-                Box::new(Variable("x".to_string(), vec![ValueType::Integer])),
+                Box::new(Variable("x".to_string(), vec![ValueType::Native(Native::i32)])),
                 Box::new(Number(1))
             ))
         );
@@ -1271,7 +1272,7 @@ mod test {
             to_ast("x = 1"),
             Ok(Infix(
                 Operation::Assignment,
-                Box::new(Variable("x".to_string(), vec![ValueType::Integer])),
+                Box::new(Variable("x".to_string(), vec![ValueType::Native(Native::i32)])),
                 Box::new(Number(1))
             ))
         );
@@ -1602,7 +1603,7 @@ mod test {
         assert_eq!(to_ast(program), Ok(expected));
 
         let program = "a = [1,2]";
-        let array_type = ValueType::Array(vec![ValueType::Integer]);
+        let array_type = ValueType::Array(vec![ValueType::Native(Native::i32)]);
         let expected = Infix(
             Operation::Assignment,
             Box::new(Variable("a".to_string(), vec![array_type])),
@@ -1614,7 +1615,7 @@ mod test {
            a = [1]
            a[0]
         ";
-        let array_type = ValueType::Array(vec![ValueType::Integer]);
+        let array_type = ValueType::Array(vec![ValueType::Native(Native::i32)]);
         let expected = Block(vec![
             Infix(
                 Operation::Assignment,

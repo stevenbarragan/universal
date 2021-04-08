@@ -234,6 +234,8 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
                             new_params
                                 .insert(0, ("self".to_string(), ValueType::Native(Native::i32)));
 
+                            let params_types: Vec<ValueType> = new_params.iter().map(|(name, kind)| kind.clone() ).collect();
+
                             let new_function = Language::Function(
                                 new_name,
                                 new_params,
@@ -243,7 +245,7 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
                             );
 
                             data.variables
-                                .add_type_methods(name, function_name, results);
+                                .add_type_methods(name, function_name, &params_types);
 
                             types_wasm.push(to_wasm(&new_function, data))
                         }
@@ -320,6 +322,8 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
             let conditional_str = to_wasm(instruction, data);
             let block_str = to_wasm(block, data);
 
+            let instruction_type = value_types_to_wasm(&find_value_type(&instruction, &data.variables));
+
             match conditional_type {
                 ConditionalType::If => match block2 {
                     Some(x) => format!(
@@ -333,13 +337,14 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
                 },
                 ConditionalType::Unless => match block2 {
                     Some(x) => format!(
-                        "(if (result {}) (i32.eqz {}) (then {}) (else {}))",
+                        "(if (result {}) ({}.eqz {}) (then {}) (else {}))",
                         value_types_to_wasm(&find_value_type(block, &data.variables)),
+                        instruction_type,
                         conditional_str,
                         block_str,
                         to_wasm(x, data)
                     ),
-                    None => format!("(if (i32.eqz {}) (then {}))", conditional_str, block_str),
+                    None => format!("(if ({}.eqz {}) (then {}))", instruction_type, conditional_str, block_str),
                 },
             }
         }
@@ -410,7 +415,9 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
             if let Some(ValueType::CustomType(name, _types)) = variable_types.first() {
                 let offset = data.variables.calculate_memory_offset(name, message);
 
-                format!("(i32.load offset={} (local.get ${}))", offset, callee)
+                let type_str = value_types_to_wasm(&variable_types);
+
+                format!("({}.load offset={} (local.get ${}))", type_str, offset, callee)
             } else {
                 panic!("Variable {} has no types", callee);
             }
@@ -491,19 +498,22 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
 
             let mut pointer = 0;
 
-            for (_attr_name, value) in values {
+            for (index, (_attr_name, value)) in values.into_iter().enumerate() {
+                let type_str = value_type_to_wasm(&types[index]);
+
                 result = format!(
                     "{} {}",
                     result,
                     format!(
-                        "(local.get ${}) {} (i32.store offset={})",
+                        "(local.get ${}) {} ({}.store offset={})",
                         variable_name,
                         to_wasm(value, data),
+                        type_str,
                         pointer,
                     )
                 );
 
-                pointer += size(&find_value_type(value, &data.variables));
+                pointer += size(&vec![types[index].clone()]);
             }
 
             result.to_string()
@@ -562,21 +572,21 @@ mod test {
 
         let function = Function(
             "add2".to_string(),
-            vec![("num".to_string(), ValueType::Integer)],
-            vec![ValueType::Integer],
+            vec![("num".to_string(), ValueType::Native(Native::i32))],
+            vec![ValueType::Native(Native::i32)],
             vec![Infix(
                 Operation::Add,
-                Box::new(Variable("num".to_string(), vec![ValueType::Integer])),
+                Box::new(Variable("num".to_string(), vec![ValueType::Native(Native::i32)])),
                 Box::new(Number(2)),
             )],
             Visiblitity::Private,
         );
 
-        assert_eq!(to_wasm(&function, &mut data), "(func $add2_int (param $num i32) (result i32) (i32.add (local.get $num) (i32.const 2)))");
+        assert_eq!(to_wasm(&function, &mut data), "(func $add2_i32 (param $num i32) (result i32) (i32.add (local.get $num) (i32.const 2)))");
 
         let function_ast = to_ast(
-            "fn tres: Int
-               num: Int = 3
+            "fn tres: i32
+               num = 3
              end",
         );
 
@@ -591,8 +601,8 @@ mod test {
         }
 
         let function_ast = to_ast(
-            "fn tres(x: Int): Int
-              num: Int = 3
+            "fn tres(x: i32): i32
+              num = 3
               x + num
             end",
         );
@@ -600,7 +610,7 @@ mod test {
         match function_ast {
             Ok(function) => {
                 assert_eq!(to_wasm(&function, &mut data),
-                    "(func $tres_int (param $x i32) (result i32) (local $num i32) (i32.const 3) (local.set $num) (i32.add (local.get $x) (local.get $num)))");
+                    "(func $tres_i32 (param $x i32) (result i32) (local $num i32) (i32.const 3) (local.set $num) (i32.add (local.get $x) (local.get $num)))");
             }
             Err(e) => println!("{}", e),
         }
@@ -609,12 +619,12 @@ mod test {
 
         let functions_ast = to_ast(
             "module test
-                fn tres(): Int
+                fn tres(): i32
                   var1 = 3
                   var1
                 end
 
-                fn dos(): Int
+                fn dos(): i32
                   var2 = 2
                   var2
                 end
@@ -636,7 +646,7 @@ mod test {
         let mut data: Data = Default::default();
         let assignation = Infix(
             Operation::Assignment,
-            Box::new(Variable("x".to_string(), vec![ValueType::Integer])),
+            Box::new(Variable("x".to_string(), vec![ValueType::Native(Native::i32)])),
             Box::new(Number(1)),
         );
 
@@ -654,7 +664,7 @@ mod test {
         let function = Function(
             "tres".to_string(),
             vec![],
-            vec![ValueType::Integer],
+            vec![ValueType::Native(Native::i32)],
             vec![Language::Number(3)],
             Visiblitity::Public,
         );
@@ -665,7 +675,7 @@ mod test {
         exports.push(Export::Function(
             "tres".to_string(),
             vec![],
-            vec![ValueType::Integer],
+            vec![ValueType::Native(Native::i32)],
         ));
 
         let module = Language::Module(
@@ -842,14 +852,14 @@ mod test {
         let program = "
         module Test
             Type People
-              age: Int
-              index: Int
+              age: i64
+              index: i64
 
-              fn calculate(): Int
+              fn calculate(): i64
                 self.age
               end
 
-              fn age(): Int
+              fn age(): i64
                 self.calculate()
               end
             end
@@ -863,7 +873,7 @@ mod test {
 
         let ast = to_ast(program).unwrap();
 
-        let expected = "(module $Test (import \"env\" \"memory\" (memory $env.memory 1)) (func $People_calculate_int (param $self i32) (result i32) (i32.load offset=0 (local.get $self))) (func $People_age_int (param $self i32) (result i32) (call $People_calculate_int (local.get $self))) (func $main (result i32) (local.tee $People0 (memory.grow (i32.const 4))) (local.get $People0) (i32.const 20) (i32.store offset=0) (local.get $People0) (i32.const 24) (i32.store offset=4)) (export \"main\" (func $main)))";
+        let expected = "(module $Test (import \"env\" \"memory\" (memory $env.memory 1)) (func $People_calculate_i32 (param $self i32) (result i64) (i32.load offset=0 (local.get $self))) (func $People_age_i32 (param $self i32) (result i64) (call $People_calculate_i32 (local.get $self))) (func $main (result i32) (local $People0 i32) (local.tee $People0 (memory.grow (i32.const 16))) (local.get $People0) (i32.const 20) (i64.store offset=0) (local.get $People0) (i32.const 24) (i64.store offset=8)) (export \"main\" (func $main)))";
 
         assert_eq!(to_wasm(&ast, &mut data), expected);
     }
