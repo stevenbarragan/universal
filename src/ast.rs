@@ -13,11 +13,17 @@ use crate::utils::*;
 pub struct UniversalParser;
 
 #[derive(Debug, PartialEq, Clone, Hash, Eq)]
+pub enum Native {
+    i32,
+    i64,
+}
+
+#[derive(Debug, PartialEq, Clone, Hash, Eq)]
 pub enum ValueType {
     Bool,
     Float,
     Integer,
-    Native(String),
+    Native(Native),
     Symbol,
     Array(Vec<ValueType>),
     CustomType(Name, Vec<ValueType>),
@@ -29,7 +35,10 @@ impl fmt::Display for ValueType {
             ValueType::Bool => f.write_str("bool"),
             ValueType::Float => f.write_str("float"),
             ValueType::Integer => f.write_str("int"),
-            ValueType::Native(native_type) => f.write_str(&native_type),
+            ValueType::Native(native_type) => match native_type {
+                Native::i32 => f.write_str("i32"),
+                Native::i64 => f.write_str("i64"),
+            },
             ValueType::Symbol => f.write_str("symbol"),
             ValueType::Array(_value_type) => f.write_str("array"),
             ValueType::CustomType(name, _types) => f.write_str(name),
@@ -305,7 +314,7 @@ pub enum Language {
 pub fn find_value_type(node: &Language, scope: &Context) -> Vec<ValueType> {
     match node {
         Language::Variable(_, value_type) => value_type.clone(),
-        Language::Number(_) => vec![ValueType::Native("i32".to_string())],
+        Language::Number(_) => vec![ValueType::Native(Native::i64)],
         Language::Float(_) => vec![ValueType::Float],
         Language::Infix(_, _, right) => find_value_type(right, scope),
         Language::Function(_, _, results, _, _) => results.clone(),
@@ -915,7 +924,9 @@ fn str_to_value_type(value_type: &str) -> ValueType {
         "Int" => ValueType::Integer,
         "Float" => ValueType::Float,
         "Symbol" => ValueType::Symbol,
-        kind => ValueType::Native(kind.to_string()),
+        "i32" => ValueType::Native(Native::i32),
+        "i64" => ValueType::Native(Native::i64),
+        kind => ValueType::Native(Native::i64), // illegal
     }
 }
 
@@ -1679,7 +1690,7 @@ mod test {
         let named_types = NamedTypes::new();
 
         let mut attributes = Attributes::new();
-        attributes.insert("level".to_string(), ValueType::Native("i32".to_string()));
+        attributes.insert("level".to_string(), ValueType::Native(Native::i32));
 
         let custom_type = CustomType("Person".to_owned(), named_types, attributes, vec![]);
 

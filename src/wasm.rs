@@ -476,10 +476,9 @@ pub fn to_wasm(node: &Language, data: &mut Data) -> String {
 
             let variable_name = new_variable_name_with_prefix(name, &data);
 
-            data.variables.add_variable(
-                variable_name.to_string(),
-                vec![ValueType::Native("i32".to_string())],
-            );
+            // add temporal variable pointer into method variables
+            data.variables
+                .add_variable(variable_name.to_string(), vec![ValueType::Native(Native::i32)]);
 
             let mut result = format!(
                 "(local.tee ${} (memory.grow (i32.const {})))",
@@ -539,7 +538,10 @@ fn value_type_to_wasm(value_type: &ValueType) -> String {
         ValueType::Float => "f32".to_string(),
         ValueType::Symbol => "i32 i32".to_string(),
         ValueType::Bool => "i32".to_string(),
-        ValueType::Native(name) => name.to_string(),
+        ValueType::Native(native_type) => match native_type {
+            Native::i32 => "i32".to_string(),
+            Native::i64 => "i64".to_string(),
+        },
         ValueType::Array(_value_type) => "i32".to_string(),
         ValueType::CustomType(_name, _value_types) => "i32".to_string(),
     }
