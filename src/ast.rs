@@ -1644,13 +1644,13 @@ mod test {
     fn types_definition() {
         let program = "
         Type People
-          age: Int
+          age: i32
 
-          fn calculate(): Int
+          fn calculate(): i32
             self.age
           end
 
-          fn age(): Int
+          fn age(): i32
             self.calculate()
           end
         end
@@ -1659,12 +1659,12 @@ mod test {
         let named_types = NamedTypes::new();
 
         let mut attributes = Attributes::new();
-        attributes.insert("age".to_string(), ValueType::Integer);
+        attributes.insert("age".to_string(), ValueType::Native(Native::i32));
 
         let function_calculate = Function(
             "calculate".to_owned(),
             Params::new(),
-            vec![ValueType::Integer],
+            vec![ValueType::Native(Native::i32)],
             vec![SelfAttributeAccess("age".to_string())],
             Visiblitity::Private,
         );
@@ -1672,7 +1672,7 @@ mod test {
         let function_age = Function(
             "age".to_owned(),
             Params::new(),
-            vec![ValueType::Integer],
+            vec![ValueType::Native(Native::i32)],
             vec![SelfMethodAccess("calculate".to_string(), Parameters::new())],
             Visiblitity::Private,
         );
