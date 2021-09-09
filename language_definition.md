@@ -48,6 +48,7 @@ true xor true  is false
 true not eq false is true <<---------------------------------- how is it on wast?
 true !=     false is true
 ```
+
 ## String
 ```
 "square"          is type String
@@ -109,7 +110,13 @@ jonh   = Human { name: Jonh pets: [nemo] }
 steven = Human { Steven [dory] }
 
 humans = [jonh steven]
+
 humans | where pets.name == dori | first is steven
+humans | pets | where name == dory | first is steven <--------- leaning towards this sintax
+humans | (pets | where name == dori) | first is steven
+
+humans | get pets | where name == dory is dory   <------------- along with this one 
+humans | pets | where name == dory | first is dory
 
 humans | first | where numbers.it > 24
 humans | first | numbers               | where it > 24
@@ -142,17 +149,17 @@ type IpAddress
 end
 
 home = IpAddres
-	version: IpVersion | V4
-	address: 127.0.0.1
+  version: IpVersion | V4
+  address: 127.0.0.1
 end
 
 home | version is IpVersion | v4
 
 IpVersion | V6 vs IpVersion::V6 <------------------------------ enum access? leaning towars second version, imports uses same sintax, who about both
+IpVersion.V6
 
 work = IpAddress { IpVersion | v6 2001:db8:0:0:0:ff00:42:8329 }
 work = IpAddress { IpVersion::v6 2001:db8:0:0:0:ff00:42:8329 }
-
 
 adresses = [home work]
 adresses | where version eq V4 | first is home
@@ -172,22 +179,24 @@ adresses | where version eq V4 | first is home
   127.0.0.1 is type String
 ```
 
-# Variables
+# Identifier
 ```
 a = 1                <<---------------------------------------- in-mutable?
-a is 1
 
 a | inc is 2
 a is 1
+```
 
+# Variables
+```
 mut x := 1                 <<---------------------------------- mutable?
 mut x = 1                  <<---------------------------------- other option
-x := 1                  
+x := 1
 x = 1
 
 x := 2
 
-x | inc!             <<--------------------------------------- bang methods for mutables
+x | inc!             <<---------------------------------------- bang methods for mutables
 x is 26
 
 for it in 1..3
@@ -210,15 +219,14 @@ true ? verdad : falso is verdad
 walk() if age > 1
 
 true and true is true
-true && true  is true                <<----------------------- and vs &&
+true && true  is true                <<------------------------ and vs &&
 
 41 | it > 30 and it < 50 is true
 
 human = Human { Steven , 30 }
-human | age >= 21 and it type? Human   is true 
-human | age >= 21 and it is type Human is true 
-human | age >= 21 and ( it | fly? )    is false 
-human | age >= 21 and fly?             is false 
+human | age >= 21 and type? Human    is true 
+human | age >= 21 and fly?           is false 
+human | age >= 21 and ( it | fly? )  is false 
 ```
 
 ## Functions
@@ -242,7 +250,7 @@ a b = other()
 
 # product and addition
 fun proAddition(a: Int b: Int): Int Int
-  a * b, a + b <-------------------------------- how to multiple returns?
+  a * b, a + b <----------------------------------------------- how to multiple returns?
 end
 ```
 
@@ -254,10 +262,10 @@ it is "it" and type String
 1 | (it) { it + 1 } is 2
 1 | it + 1          is 2
 
-inc = it + 1 <----------------------------------- do not allow lamda assignation?!
+inc = it + 1 <------------------------------------------------- do not allow lamda assignation?!
 1 | inc is 2
 
-inc is type Int: Int <--------------------------- anotated lamdas
+inc is type Int: Int <----------------------------------------- annotated lamd as?
 inc is type Lambda(Int): Int
 
 10    | it * it is 20
@@ -272,16 +280,13 @@ inc is type Lambda(Int): Int
 
 # Generic types
 ```
-fun map(iterator: kind[] action(kind): kind) kind[] <-------- Anotated lambdas
+fun map(iterator: kind[] action(kind): kind) kind[] <---------- annotated lambdas
   mut result = kind[] <---------------------------------------- mutable!
   for elem in iterator
     result | insert action(elem)
+
     result | insert elem | action <----------------------------- How to do double pipe?
-
     result | insert(elem | action)
-
-    a = elem | action
-    result | insert a
   end
 
   result
@@ -294,7 +299,7 @@ for x in 0..42
   x | double | print
 end
 
-0..3 | map { x | double } is [0 2 4 6]
+0..3 | map( x | double ) is [0 2 4 6]
 
 a = 0..3 | map double
 a is [0 2 4 6]
@@ -335,8 +340,9 @@ end
 ```
 
 # Examples
-
 ```
+"hello world" | print
+
 # FizzBuzz
 fun fizzbuzz(x: Int)
   if x mod 15 eq 0
