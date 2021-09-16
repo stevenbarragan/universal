@@ -34,10 +34,9 @@ false    is not true
 not true is false
 
 1    eq     1     is true
-true not eq false is true
+1    not eq 1     is false
 true and    false is false
 true or     false is true
-true xor    true  is false
 ```
 
 ## String
@@ -57,11 +56,10 @@ name = Steven
 
 numbers  = [1 2 3]              <<--------------------------- each array element in different color!
 
-numbers | first is 1
-numbres | nth 0 is 1
-
+numbers | first        is 1
+numbres | nth 0        is 1
 numbers | size         is 3
-numbers | max          is 3
+
 numbers | where it > 1 is [2 3]
 numbers | insert 4     is [1 2 3 4]
 
@@ -136,8 +134,8 @@ route(ip_kind: IpAddres)
 end
 
 type IpAddress
-	version: IpVersion
-	address: String
+  version: IpVersion
+  address: String
 end
 
 home = IpAddres
@@ -214,7 +212,7 @@ true && true  is true                <<------------------------ and vs &&
 
 41 | it > 30 and it < 50 is true
 
-human = Human { Steven , 30 }
+human = Human { Steven 30 }
 human | age >= 21 and type? Human    is true 
 human | age >= 21 and fly?           is false 
 human | age >= 21 and ( it | fly? )  is false 
@@ -223,8 +221,8 @@ human | age >= 21 and ( it | fly? )  is false
 ## Functions
 ```
 # Fibonacci Sequence
-fib(number: Int)
-  number <= 1 ? number : fib(numer - 1) + fib(number - 2) <----- we need parentesis calls after all!
+fib(num: Int)
+  num <= 1 ? num : fib(num - 1) + fib(num - 2) <---------------- we need parentesis calls after all?!
 fib(numbers: Int[])
   numbers | map fib
 check
@@ -268,9 +266,9 @@ inc is type (Int): Int
 10    | it * it is 20
 10 20 | a + b   is 30
 
-[1 2] | map    x + 1       is [2 3]
-[1 2] | map    double      is [2 4]
-[1 2] | reduce it + acc    is 3
+[1 2] | map    x + 1    is [2 3]
+[1 2] | map    double   is [2 4]
+[1 2] | reduce it + acc is 3
 
 [nemo dory] | map double raises Error { no-method double(Pet) }
 ```
@@ -297,6 +295,10 @@ end
 0..3 | map double is [0 2 4 6]
 0..3 | reduce x + sum is 6
 0..3 | max is 3
+
+loop
+  "to the infinity" | print
+end
 ```
 
 # Pattern matching
