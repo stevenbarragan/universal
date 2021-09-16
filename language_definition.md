@@ -1,18 +1,14 @@
 # Pipe Operator
 ```
-  5   | double is double(5)
-  1 2 | add    is add(1, 3)
-  5   | double is 10
-  10  | it > 5 is true
+  10   | it           is 10
+  10   | it > 2       is true
+  10   | double       is 20
+  10   | double | inc is 21
+  10 1 | add          is 11
+  10   | 42           is 42
 
-  Day { name: Monday } | name == Monday is true
-
-  human | age >= 21 and fly? is false <------------------------ implicit params!
-  human | age >= 21 and (it | fly?) is false 
-  human | age >= 21 and fly?(it) is false 
-
-  a = 5
-  5 | it + a is 10 <------------------------------------------- should it have access to "a"?
+  human = Human { age: 30 }
+  human | age eq 30 is true
 ```
 
 # Types
@@ -35,18 +31,13 @@ PI   is type Float
 ```
 true     is type bool
 false    is not true
+not true is false
 
-not true is false <<------------------------------------------ how are subfixes gonna look like?
-!true    is false
-
-1    ==  1     is true
-1    eq  1     is true
-true and false is false
-true or  false is true
-true xor true  is false
-
-true not eq false is true <<---------------------------------- how is it on wast?
-true !=     false is true
+1    eq     1     is true
+true not eq false is true
+true and    false is false
+true or     false is true
+true xor    true  is false
 ```
 
 ## String
@@ -54,7 +45,9 @@ true !=     false is true
 "square"          is type String
 square            is type String
 square            is "square"
-"Hello { world }" is "Hello world"
+
+name = Steven
+"Hello { name }" is "Hello Steven"
 ```
 
 ## Array
@@ -64,7 +57,6 @@ square            is "square"
 
 numbers  = [1 2 3]              <<--------------------------- each array element in different color!
 
-numbers[0]      is 1                   <<--------------------- we can hold on this syntax?
 numbers | first is 1
 numbres | nth 0 is 1
 
@@ -93,7 +85,7 @@ type Pet
   age: Int
 end
 
-nemo = Pet { name: Nemo, age: 8 } <<--------------------------- how would it work with `8years`?
+nemo = Pet { name: Nemo, age: 8 }
 blue = Pet { Blue 9 }
 
 my_pets = [nemo dori]
@@ -138,7 +130,7 @@ four is IpVersion | V4
 
 42 | it < 14 and it > 20 is false
 
-fun route(ip_kind: IpAddres)
+route(ip_kind: IpAddres)
   if ip_kind eq IpVersion | v4
     ...
 end
@@ -155,8 +147,7 @@ end
 
 home | version is IpVersion | v4
 
-IpVersion | V6 vs IpVersion::V6 <------------------------------ enum access? leaning towars second version, imports uses same sintax, who about both
-IpVersion.V6
+IpVersion | V6 vs IpVersion::V6 <------------------------------ enum access? leaning towars second version, imports uses same sintax, what about both
 
 work = IpAddress { IpVersion | v6 2001:db8:0:0:0:ff00:42:8329 }
 work = IpAddress { IpVersion::v6 2001:db8:0:0:0:ff00:42:8329 }
@@ -206,7 +197,7 @@ end
 
 # Conditionals
 ```
-if 42 > 22 and it < 50 is true <<------------------------------- "it" without pipe in boolean operation?
+if 42 | it > 22 and it < 50
   "be happy"
 else if not true
   "be happy"
@@ -216,7 +207,7 @@ end
 
 true ? verdad : falso is verdad
 
-walk() if age > 1
+walk() if age > 1  <------------------------------------------- use cases? early return. Hold on this syntax?
 
 true and true is true
 true && true  is true                <<------------------------ and vs &&
@@ -232,41 +223,47 @@ human | age >= 21 and ( it | fly? )  is false
 ## Functions
 ```
 # Fibonacci Sequence
-fun fib(number: Int)
-  number <= 1 ? number : number - 1 | fib
+fib(number: Int)
+  number <= 1 ? number : fib(numer - 1) + fib(number - 2) <----- we need parentesis calls after all!
+fib(numbers: Int[])
+  numbers | map fib
 check
-  0 | fib is 0
-  1 | fib is 1
-  3 | fib is 5
+  0     | fib is 0
+  3     | fib is 5
+  [1 2] | fib is [1 3]
 end
 
-[1 2] | map fib is [1 3]
-
-fn other()
+one-two()
   1 2
+check
+  one-two() is 1 2
+  | one-two is 1 2 <------------------------------------------- execute function without params using pipe!?
 end
 
-a b = other()
+a b = one-two()
+a b = | one-two
 
 # product and addition
-fun proAddition(a: Int b: Int): Int Int
+pro-addition(a: Int b: Int)
   a * b, a + b <----------------------------------------------- how to multiple returns?
+check
+  1 2 | pro-addition is 2 3
+  3 5 | pro-addition is [8 15] <------------------------------- multiple responses can be treated as an array? if they're the same type? too complicated!
 end
 ```
 
 # Lambdas
 ```
-it is "it" and type String
-
 1 | it              is 1
-1 | (it) { it + 1 } is 2
+1 | (it) it + 1     is 2
 1 | it + 1          is 2
 
-inc = it + 1 <------------------------------------------------- do not allow lamda assignation?!
+inc = it + 1 <------------------------------------------------- do not allow lambda assignation?!
+inc(it) it + 1
+
 1 | inc is 2
 
-inc is type Int: Int <----------------------------------------- annotated lamd as?
-inc is type Lambda(Int): Int
+inc is type (Int): Int
 
 10    | it * it is 20
 10 20 | a + b   is 30
@@ -275,18 +272,16 @@ inc is type Lambda(Int): Int
 [1 2] | map    double      is [2 4]
 [1 2] | reduce it + acc    is 3
 
-[nemo dory] | map double raises Error { no-method double(:Pet) }
+[nemo dory] | map double raises Error { no-method double(Pet) }
 ```
 
 # Generic types
 ```
-fun map(iterator: kind[] action(kind): kind) kind[] <---------- annotated lambdas
-  mut result = kind[] <---------------------------------------- mutable!
+map(iterator: any[] action(any): kind) kind[] <------------- annotated lambdas
+  mut result = kind[] <--------------------------------------- mutable?! :( 
   for elem in iterator
-    result | insert action(elem)
-
-    result | insert elem | action <----------------------------- How to do double pipe?
-    result | insert(elem | action)
+    result = result | insert action(elem)
+    result |= insert action(elem) <--------------------------- syntax sugar for pipe reassigment? pipement?
   end
 
   result
@@ -299,13 +294,9 @@ for x in 0..42
   x | double | print
 end
 
-0..3 | map( x | double ) is [0 2 4 6]
-
-a = 0..3 | map double
-a is [0 2 4 6]
-
-0..3  | reduce x + sum is 6
-0..42 | max is 42 
+0..3 | map double is [0 2 4 6]
+0..3 | reduce x + sum is 6
+0..3 | max is 3
 ```
 
 # Pattern matching
@@ -344,15 +335,61 @@ end
 "hello world" | print
 
 # FizzBuzz
-fun fizzbuzz(x: Int)
+fizzbuzz(x: Int)
   if x mod 15 eq 0
     FizzBuzz
   else if x mod 3 eq 0
     Fizz
   else if x mod 5 eq 0
     Buzz
+  else
+    x
   end
+check
+  51 | fizzbuzz is 51
+  9  | fizzbuzz is Fizz
+  20 | fizzbuzz is Buzz
+  45 | fizzbuzz is FizzBuzz
 end
 
 ..100 | map fizzbuzz | print
+
+..10 | where it | fizzbuzz eq Fizz is [3 9] <---------------------- How to call regular functions to perform a sql query?
+
+# Quicksort
+quicksort(list: sortable[]) <<-------------------------------------- Array<Any> | any type of array | tag sortable | tag is no regessary
+  return list if list | empty?
+
+  pivot = list | first
+  left  = list | where it < pivot  | quicksort
+  right = list | where it >= pivot | quicksort
+
+  left | join right
+check
+  []         | quicksort is []
+  [2 1]      | quicksort is [1 2]
+  [42 2 1 5] | quicksort is [1 2 5 42]
+end
+
+# Combines all list elements using action
+reduce(list: any[] init: result action(any result): result)
+  return init if list | empty?
+
+  mut acc = init 
+  for elem in list
+    acc = elem | action acc
+  end
+  
+  acc
+reduce(list: any[] action(any result): result)
+  raise Error { expected non-empty-array } if list | empty?
+
+  init = list | first
+
+  list | tail | reduce init action
+check
+  [1 2 3] | reduce it + acc    is 6
+  []      | reduce 20 it + acc is 20
+  [1 2 3] | reduce 20 it + acc is 26
+end
 ```
